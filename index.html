@@ -1,0 +1,1454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DTU6 Route Dispatch Bot</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+  :root {
+    --bg:#0d0f14; --surface:#161920; --surface2:#1e2230; --border:#2a2f40;
+    --accent:#4ade80; --accent2:#facc15; --accent3:#fb923c;
+    --pad1:#3b82f6; --pad2:#f97316; --pad3:#22c55e;
+    --text:#e8ecf4; --muted:#6b7280; --danger:#ef4444; --info:#38bdf8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;}
+
+  header{border-bottom:1px solid var(--border);padding:13px 24px;display:flex;align-items:center;gap:10px;background:var(--surface);}
+  .logo{font-family:'Space Mono',monospace;font-size:13px;font-weight:700;color:var(--accent);letter-spacing:.08em;text-transform:uppercase;}
+  .logo span{color:var(--muted);}
+  .badge{font-family:'Space Mono',monospace;font-size:10px;padding:3px 8px;border-radius:4px;border:1px solid var(--border);color:var(--muted);}
+  .badge.ok{border-color:var(--accent);color:var(--accent);}
+  .hdr-btns{margin-left:auto;display:flex;gap:8px;}
+
+  .layout{display:grid;grid-template-columns:300px 1fr;height:calc(100vh - 51px);}
+  .sidebar{border-right:1px solid var(--border);background:var(--surface);overflow-y:auto;display:flex;flex-direction:column;}
+  .sb{padding:14px 16px;border-bottom:1px solid var(--border);}
+  .lbl{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:9px;}
+
+  .upload-zone{border:1.5px dashed var(--border);border-radius:8px;padding:14px;text-align:center;cursor:pointer;transition:all .2s;position:relative;}
+  .upload-zone:hover{border-color:var(--accent);background:rgba(74,222,128,.04);}
+  .upload-zone.loaded{border-color:var(--accent);border-style:solid;}
+  .upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+  .upload-icon{font-size:18px;margin-bottom:5px;}
+  .ul-label{font-size:11px;color:var(--muted);}
+  .ul-label strong{color:var(--text);display:block;font-size:11px;margin-bottom:2px;}
+  .file-ok{display:none;font-size:11px;color:var(--accent);font-family:'Space Mono',monospace;justify-content:center;gap:5px;}
+
+  .inp{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:12px;font-family:'Space Mono',monospace;outline:none;width:100%;transition:border .15s;}
+  .inp:focus{border-color:var(--accent2);}
+  .inp::placeholder{color:var(--muted);}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;}
+  .row-flex{display:flex;gap:6px;margin-top:6px;align-items:center;}
+  .status-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);display:inline-block;}
+  .status-dot.ok{background:var(--accent);}
+
+  .wave-btn{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:6px;cursor:pointer;border:1px solid var(--border);background:var(--surface2);font-size:11px;font-family:'Space Mono',monospace;color:var(--muted);transition:all .15s;margin-bottom:4px;}
+  .wave-btn:hover{border-color:var(--accent);color:var(--text);}
+  .wave-btn.active{border-color:var(--accent);background:rgba(74,222,128,.08);color:var(--accent);}
+  .pd{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:4px;}
+  .pd1{background:var(--pad1);} .pd2{background:var(--pad2);} .pd3{background:var(--pad3);}
+  .wc{background:var(--surface);border-radius:4px;padding:1px 5px;font-size:10px;}
+
+  .override-row{display:grid;grid-template-columns:1fr 1fr auto;gap:5px;margin-bottom:5px;align-items:center;}
+  .btn-add{background:none;border:1px solid var(--border);color:var(--accent);cursor:pointer;border-radius:6px;padding:6px 10px;font-size:16px;line-height:1;transition:all .15s;}
+  .btn-add:hover{border-color:var(--accent);background:rgba(74,222,128,.08);}
+  .btn-rm{background:none;border:1px solid var(--border);color:var(--danger);cursor:pointer;border-radius:6px;padding:3px 7px;font-size:12px;transition:all .15s;}
+  .btn-rm:hover{border-color:var(--danger);background:rgba(239,68,68,.08);}
+
+  .main{display:flex;flex-direction:column;overflow:hidden;}
+  .tabs-main{display:flex;border-bottom:1px solid var(--border);background:var(--surface);}
+  .tab-main{padding:12px 20px;font-size:12px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:var(--muted);font-family:'Space Mono',monospace;text-transform:uppercase;letter-spacing:.05em;transition:all .15s;}
+  .tab-main.alert{color:var(--danger)!important;}
+  .tab-main.alert.active{border-bottom-color:var(--danger)!important;}
+  .tab-main.active{color:var(--accent);border-bottom-color:var(--accent);}
+  .tab-main:hover{color:var(--text);}
+  .tab-pane{display:none;flex:1;overflow:hidden;flex-direction:column;}
+  .tab-pane.active{display:flex;}
+
+  /* DISPATCH pane */
+  .toolbar{padding:11px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;background:var(--surface);flex-wrap:wrap;}
+  .btn-primary{background:var(--accent);color:#0d1a0f;border:none;padding:8px 16px;border-radius:7px;font-weight:600;font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;}
+  .btn-primary:hover{background:#86efac;}
+  .btn-primary:disabled{opacity:.35;cursor:not-allowed;}
+  .btn-sec{background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:8px 14px;border-radius:7px;font-weight:500;font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;}
+  .btn-sec:hover{border-color:var(--accent);color:var(--accent);}
+  .btn-slack{background:#611f69;color:#fff;border:none;padding:8px 16px;border-radius:7px;font-weight:600;font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;margin-left:auto;}
+  .btn-slack:hover{background:#7c3085;}
+  .btn-slack:disabled{opacity:.35;cursor:not-allowed;}
+  .btn-warn{background:rgba(250,204,21,.1);color:var(--accent2);border:1px solid rgba(250,204,21,.3);padding:8px 14px;border-radius:7px;font-weight:500;font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;}
+  .btn-warn:hover{background:rgba(250,204,21,.2);}
+
+  .content{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:12px;}
+
+  .wave-group{border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+  .wave-hdr{padding:10px 14px;display:flex;align-items:center;gap:8px;font-family:'Space Mono',monospace;font-size:12px;cursor:pointer;user-select:none;}
+  .wave-hdr:hover{background:rgba(255,255,255,.02);}
+  .wave-time{font-weight:700;color:var(--text);font-size:13px;}
+  .pad-badge{padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;}
+  .pb1{background:rgba(59,130,246,.2);color:#93c5fd;border:1px solid rgba(59,130,246,.3);}
+  .pb2{background:rgba(249,115,22,.2);color:#fdba74;border:1px solid rgba(249,115,22,.3);}
+  .pb3{background:rgba(34,197,94,.2);color:#86efac;border:1px solid rgba(34,197,94,.3);}
+  .wave-ct{color:var(--muted);margin-left:auto;font-size:11px;}
+
+  .rtbl{width:100%;border-collapse:collapse;}
+  .rtbl th{background:var(--surface);padding:7px 11px;text-align:left;font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;border-top:1px solid var(--border);border-bottom:1px solid var(--border);}
+  .rtbl td{padding:8px 11px;border-bottom:1px solid rgba(42,47,64,.5);font-size:13px;vertical-align:middle;}
+  .rtbl tr:last-child td{border-bottom:none;}
+  .rtbl tr:hover td{background:rgba(255,255,255,.015);}
+  .chk{cursor:pointer;accent-color:var(--accent);width:13px;height:13px;}
+  .cx{font-family:'Space Mono',monospace;font-size:12px;color:var(--accent2);font-weight:700;}
+  .cxo{font-family:'Space Mono',monospace;font-size:12px;color:var(--accent3);font-weight:700;}
+  .cxo::after{content:' ↺';font-size:9px;opacity:.7;}
+  .stg{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);}
+  .van-cell{display:flex;align-items:center;gap:5px;}
+  .vtag{font-family:'Space Mono',monospace;font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;white-space:nowrap;}
+  .v-sheet  {background:rgba(74,222,128,.12);color:var(--accent);border:1px solid rgba(74,222,128,.25);}
+  .v-learned{background:rgba(56,189,248,.12);color:var(--info);border:1px solid rgba(56,189,248,.25);}
+  .v-new    {background:rgba(250,204,21,.12);color:var(--accent2);border:1px solid rgba(250,204,21,.25);}
+  .v-none   {background:rgba(107,114,128,.12);color:var(--muted);border:1px solid rgba(107,114,128,.2);font-size:10px;}
+  .vsrc{font-size:9px;color:var(--muted);font-family:'Space Mono',monospace;text-transform:uppercase;}
+  .sel-all-row{padding:6px 11px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);background:rgba(255,255,255,.01);}
+
+  .preview-box{background:var(--surface2);border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+  .preview-hdr{padding:7px 12px;border-bottom:1px solid var(--border);font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;text-transform:uppercase;}
+  .preview-body{padding:12px;font-family:monospace;font-size:12px;line-height:1.8;white-space:pre-wrap;color:var(--text);max-height:320px;overflow-y:auto;}
+  .copy-btn{background:none;border:1px solid var(--border);color:var(--accent);padding:3px 9px;border-radius:4px;font-size:10px;cursor:pointer;font-family:'Space Mono',monospace;transition:all .15s;text-transform:uppercase;}
+  .copy-btn:hover{background:rgba(74,222,128,.08);}
+  .copy-btn.copied{color:var(--info);border-color:var(--info);}
+
+  /* AFFINITY pane */
+  .aff-pane{padding:20px;flex:1;overflow-y:auto;}
+  .aff-toolbar{display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap;}
+  .atbl{width:100%;border-collapse:collapse;font-size:12px;}
+  .atbl th{padding:7px 10px;text-align:left;font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border);background:var(--surface);}
+  .atbl td{padding:7px 10px;border-bottom:1px solid rgba(42,47,64,.4);vertical-align:middle;}
+  .atbl tr:last-child td{border-bottom:none;}
+  .atbl tr:hover td{background:rgba(255,255,255,.02);}
+  .src-badge{font-family:'Space Mono',monospace;font-size:9px;padding:2px 6px;border-radius:3px;text-transform:uppercase;}
+  .s-sheet  {background:rgba(74,222,128,.12);color:var(--accent);border:1px solid rgba(74,222,128,.2);}
+  .s-learned{background:rgba(56,189,248,.12);color:var(--info);border:1px solid rgba(56,189,248,.2);}
+  .s-manual {background:rgba(250,204,21,.12);color:var(--accent2);border:1px solid rgba(250,204,21,.2);}
+
+  /* QUERY pane */
+  .query-pane{padding:20px;flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:14px;}
+  .query-box{background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+  .query-hdr{padding:10px 14px;border-bottom:1px solid var(--border);font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);text-transform:uppercase;}
+  .query-body{padding:14px;font-size:13px;line-height:1.7;color:var(--text);white-space:pre-wrap;font-family:monospace;}
+  .query-input-row{display:flex;gap:8px;}
+
+  /* SLACK SETUP pane */
+  .setup-pane{padding:24px;flex:1;overflow-y:auto;}
+  .setup-step{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:14px;}
+  .step-num{font-family:'Space Mono',monospace;font-size:10px;color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;}
+  .step-title{font-size:15px;font-weight:600;color:var(--text);margin-bottom:10px;}
+  .step-body{font-size:13px;color:var(--muted);line-height:1.8;}
+  .step-body strong{color:var(--text);}
+  .step-body code{background:var(--bg);border:1px solid var(--border);padding:2px 7px;border-radius:4px;font-family:'Space Mono',monospace;font-size:12px;color:var(--accent2);}
+  .step-body ol{padding-left:18px;margin-top:6px;}
+  .step-body ol li{margin-bottom:6px;}
+  .step-body .img-placeholder{background:var(--bg);border:1px dashed var(--border);border-radius:6px;padding:10px 14px;font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);margin:8px 0;}
+  .scope-list{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
+  .scope-tag{background:var(--bg);border:1px solid var(--border);padding:4px 10px;border-radius:5px;font-family:'Space Mono',monospace;font-size:11px;color:var(--accent2);}
+
+  .empty-state{text-align:center;padding:60px 20px;color:var(--muted);}
+  .empty-icon{font-size:38px;margin-bottom:12px;opacity:.3;}
+
+  /* Modal */
+  .modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:100;opacity:0;pointer-events:none;transition:opacity .2s;}
+  .modal-ov.show{opacity:1;pointer-events:all;}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;width:520px;max-height:80vh;overflow-y:auto;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.5);transform:translateY(16px);transition:transform .2s;}
+  .modal-ov.show .modal{transform:translateY(0);}
+  .modal-title{font-family:'Space Mono',monospace;font-size:13px;color:var(--accent);margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;}
+  .modal-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;}
+  .modal-close:hover{color:var(--text);}
+  .modal-body{font-size:12px;line-height:1.8;color:var(--muted);}
+  .modal-body p{margin-bottom:7px;}
+  .modal-body strong{color:var(--text);}
+  .modal-body code{background:var(--surface2);padding:2px 5px;border-radius:3px;font-family:'Space Mono',monospace;color:var(--text);font-size:11px;}
+
+  .info-banner{background:rgba(56,189,248,.07);border:1px solid rgba(56,189,248,.2);border-radius:7px;padding:8px 12px;font-size:11px;color:var(--info);}
+  .warn-banner{background:rgba(250,204,21,.07);border:1px solid rgba(250,204,21,.2);border-radius:7px;padding:8px 12px;font-size:11px;color:var(--accent2);}
+  .legend{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--muted);}
+  .legend-row{display:flex;align-items:center;gap:6px;}
+
+  ::-webkit-scrollbar{width:4px;height:4px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Route<span>Dispatch</span> Bot</div>
+  <div class="badge">ZULT · DTU6</div>
+  <div class="badge ok" id="affinityBadge">Affinity Ready</div>
+  <div class="hdr-btns">
+    <button class="btn-warn" onclick="switchMainTab('affinity')">🚐 Van Affinity</button>
+    <button class="btn-warn" onclick="switchMainTab('query')">🔍 Query</button>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <div class="sb">
+      <div class="lbl">⚡ Slack Config</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:7px;">Paste your Incoming Webhook URL. <span style="color:var(--accent2);cursor:pointer;" onclick="switchMainTab('setup')">How to get it →</span></div>
+      <div class="row-flex">
+        <input class="inp" type="password" id="webhookUrl" placeholder="https://hooks.slack.com/services/…" style="flex:1;">
+        <button class="btn-add" onclick="testWebhook()" title="Test" style="font-size:12px;padding:6px 9px;">✓</button>
+      </div>
+      <div class="row2">
+        <input class="inp" id="slackChannel" placeholder="#dispatch (display only)" value="#dispatch">
+        <input class="inp" id="stationCode" placeholder="DTU6" value="DTU6">
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:var(--muted);">
+        <span class="status-dot" id="tokenDot"></span>
+        <span id="tokenStatus">Webhook not set</span>
+      </div>
+    </div>
+
+    <div class="sb">
+      <div class="lbl">📄 Day of Ops Plan</div>
+      <div class="upload-zone" id="dopsZone" onclick="document.getElementById('dopsFile').click()">
+        <input type="file" id="dopsFile" accept=".xlsx,.xls" onchange="loadDOPS(this)">
+        <div class="upload-icon">📊</div>
+        <div class="ul-label"><strong>Upload Today's DOPS</strong>Amazon Day of Ops — ZULT only</div>
+        <div class="file-ok" id="dopsLoaded">✓ <span id="dopsFileName"></span></div>
+      </div>
+    </div>
+
+    <div class="sb">
+      <div class="lbl">🔄 CX# Overrides</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:7px;">Override route codes changed on the website.</div>
+      <div id="overrideList"></div>
+      <div class="override-row">
+        <input class="inp" id="newFrom" placeholder="Old CX#" maxlength="10">
+        <input class="inp" id="newTo" placeholder="New CX#" maxlength="10">
+        <button class="btn-add" onclick="addOverride()">+</button>
+      </div>
+    </div>
+
+    <div class="sb">
+      <div class="lbl">🚫 Grounded Vans</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:7px;">These vans won't be assigned to any driver today.</div>
+      <div id="groundedList" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:7px;min-height:10px;"></div>
+      <div style="display:flex;gap:5px;">
+        <input class="inp" id="newGrounded" placeholder="e.g. Rivian 07" style="flex:1;">
+        <button class="btn-add" onclick="addGrounded()">+</button>
+      </div>
+    </div>
+
+    <div class="sb" style="flex:1;">
+      <div class="lbl">🌊 Wave Filter</div>
+      <div class="warn-banner" style="margin-bottom:9px;font-size:11px;">🟢 Pad 3 first &nbsp;|&nbsp; 🟠 Pad 2 &nbsp;|&nbsp; 🔵 Pad 1 last</div>
+      <div id="waveFilter"><div style="font-size:11px;color:var(--muted);">Load DOPS to see waves</div></div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="tabs-main">
+      <div class="tab-main active" id="mainTab-dispatch" onclick="switchMainTab('dispatch')">📦 Dispatch</div>
+      <div class="tab-main" id="mainTab-affinity" onclick="switchMainTab('affinity')">🚐 Van Affinity</div>
+      <div class="tab-main" id="mainTab-query" onclick="switchMainTab('query')">🔍 Query</div>
+      <div class="tab-main" id="mainTab-setup" onclick="switchMainTab('setup')">⚙ Slack Setup</div>
+      <div class="tab-main" id="mainTab-updates" onclick="switchMainTab('updates')" style="color:var(--danger);">🚨 Updates</div>
+    </div>
+
+    <!-- DISPATCH TAB -->
+    <div class="tab-pane active" id="pane-dispatch">
+      <div class="toolbar">
+        <button class="btn-primary" id="generateBtn" onclick="generateMessages()" disabled>⚡ Generate Messages</button>
+        <button class="btn-sec" onclick="selectAll()">☑ All</button>
+        <button class="btn-sec" onclick="clearSel()">✕ None</button>
+        <button class="btn-warn" onclick="toggleSwapPanel()" id="swapToggle">🔀 Route Swaps</button>
+        <span style="font-size:12px;color:var(--muted);" id="selCount"></span>
+        <button class="btn-slack" id="postSlackBtn" onclick="postToSlack()" disabled>💬 Post to Slack</button>
+      </div>
+      <!-- ROUTE SWAP PANEL -->
+      <div id="swapPanel" style="display:none;border-bottom:1px solid var(--border);background:var(--surface);padding:12px 18px;display:none;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+
+          <!-- DA ↔ DA SWAPS -->
+          <div>
+            <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--accent2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px;">↔ DA Route Swaps</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Two DAs exchange their full route — CX#, staging, pad, and wave all swap.</div>
+            <div id="swapList" style="display:flex;flex-direction:column;gap:5px;margin-bottom:8px;"></div>
+            <div style="display:grid;grid-template-columns:1fr auto 1fr auto;gap:5px;align-items:center;">
+              <input class="inp" id="swapFrom" placeholder="DA Name A" style="font-size:11px;">
+              <span style="color:var(--muted);font-size:13px;text-align:center;">↔</span>
+              <input class="inp" id="swapTo" placeholder="DA Name B" style="font-size:11px;">
+              <button class="btn-add" onclick="addSwap()" title="Add swap">+</button>
+            </div>
+          </div>
+
+          <!-- CX# → DA ASSIGNMENT -->
+          <div>
+            <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--info);text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px;">→ Assign DA to CX#</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Override who is assigned to a specific CX#. Updates their staging, pad, and wave automatically.</div>
+            <div id="cxAssignList" style="display:flex;flex-direction:column;gap:5px;margin-bottom:8px;"></div>
+            <div style="display:grid;grid-template-columns:1fr auto 1fr auto;gap:5px;align-items:center;">
+              <input class="inp" id="cxAssignCX" placeholder="CX# (e.g. 176)" style="font-size:11px;font-family:'Space Mono',monospace;">
+              <span style="color:var(--muted);font-size:13px;text-align:center;">→</span>
+              <input class="inp" id="cxAssignDA" placeholder="Driver Name" style="font-size:11px;">
+              <button class="btn-add" onclick="addCXAssignment()" title="Assign DA to CX#" style="border-color:var(--info);color:var(--info);">+</button>
+            </div>
+          </div>
+
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:10px;font-family:'Space Mono',monospace;">
+          Changes update the Slack preview instantly. Regenerate to reset everything.
+        </div>
+      </div>
+      <div class="content" id="mainContent">
+        <div class="empty-state">
+          <div class="empty-icon">📦</div>
+          <div style="font-size:15px;font-weight:600;color:var(--text);opacity:.5;margin-bottom:8px;">Ready for today's routes</div>
+          <div style="font-size:12px;">Upload the Day of Ops plan to get started.<br>Van affinity is pre-loaded — no extra uploads needed.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AFFINITY TAB -->
+    <div class="tab-pane" id="pane-affinity">
+      <div class="aff-pane">
+        <div class="aff-toolbar">
+          <input class="inp" id="affSearch" placeholder="Search driver or van…" oninput="renderAffinityTable()" style="flex:1;max-width:300px;">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:11px;color:var(--muted);">
+            <span class="src-badge s-sheet">Sheet</span> Pre-loaded from your Jan 2024 affinity file
+            &nbsp;·&nbsp;
+            <span class="src-badge s-learned">Learned</span> Built from daily assignments
+            &nbsp;·&nbsp;
+            <span class="src-badge s-manual">Manual</span> Hand-entered override
+          </div>
+          <button class="btn-sec" onclick="exportAffinity()" style="font-size:11px;padding:6px 12px;margin-left:auto;">Export CSV</button>
+          <button class="btn-sec" onclick="openAddModal()" style="font-size:11px;padding:6px 12px;color:var(--accent);border-color:var(--accent);">+ Add / Edit</button>
+          <button class="btn-sec" onclick="clearLearned()" style="font-size:11px;padding:6px 12px;color:var(--danger);border-color:var(--danger);">Clear Learned</button>
+        </div>
+        <div id="affTableWrap"></div>
+      </div>
+    </div>
+
+    <!-- QUERY TAB -->
+    <div class="tab-pane" id="pane-query">
+      <div class="query-pane">
+        <div class="info-banner">
+          Ask about any driver's van assignment, check who is in a specific van, or get a full affinity report. Type a question below and hit Enter.
+        </div>
+        <div class="query-input-row">
+          <input class="inp" id="queryInput" placeholder='e.g. "What van is Josue Cardoza in?" or "Who drives Rivian 06?" or "Show all assignments"' style="flex:1;" onkeydown="if(event.key==='Enter')runQuery()">
+          <button class="btn-primary" onclick="runQuery()">Ask</button>
+        </div>
+        <div id="queryResults"></div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">
+          Try: &nbsp;
+          <span class="src-badge s-sheet" style="cursor:pointer;" onclick="setQ('Show all van assignments')">Show all assignments</span> &nbsp;
+          <span class="src-badge s-sheet" style="cursor:pointer;" onclick="setQ('Which vans are unassigned?')">Unassigned vans</span> &nbsp;
+          <span class="src-badge s-learned" style="cursor:pointer;" onclick="setQ('Who are the new drivers today?')">New drivers today</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLACK SETUP TAB -->
+    <div class="tab-pane" id="pane-setup">
+      <div class="setup-pane">
+        <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:16px;">Complete Slack App Setup Guide</div>
+
+        <div class="setup-step">
+          <div class="step-num">Step 1 — Create a Slack App</div>
+          <div class="step-title">Go to api.slack.com/apps</div>
+          <div class="step-body">
+            <ol>
+              <li>Sign in at <strong>api.slack.com/apps</strong> with your Slack work account</li>
+              <li>Click <strong>Create New App</strong> → <strong>From scratch</strong></li>
+              <li>Name it <code>DTU6 Dispatch Bot</code>, pick your workspace → <strong>Create App</strong></li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="setup-step">
+          <div class="step-num">Step 2 — Enable Incoming Webhooks</div>
+          <div class="step-title">This is how the bot posts messages</div>
+          <div class="step-body">
+            <ol>
+              <li>In the left sidebar of your app settings, click <strong>Incoming Webhooks</strong></li>
+              <li>Toggle <strong>Activate Incoming Webhooks</strong> to <strong>On</strong></li>
+              <li>Scroll down and click <strong>Add New Webhook to Workspace</strong></li>
+              <li>Choose your dispatch channel (e.g. <code>#dispatch</code> or <code>#az-daily-operations</code>) → click <strong>Allow</strong></li>
+              <li>You'll see a <strong>Webhook URL</strong> that starts with <code>https://hooks.slack.com/services/</code></li>
+              <li>Click <strong>Copy</strong></li>
+            </ol>
+            <div class="img-placeholder" style="margin-top:10px;">📋 The webhook URL looks like: https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX</div>
+          </div>
+        </div>
+
+        <div class="setup-step">
+          <div class="step-num">Step 3 — Paste Webhook into the Bot</div>
+          <div class="step-title">Left sidebar → Slack Config</div>
+          <div class="step-body">
+            <ol>
+              <li>Paste the webhook URL into the <strong>Slack Config</strong> field on the left sidebar</li>
+              <li>Click the <strong>✓</strong> button — you'll get a test message in your channel confirming it works</li>
+              <li>The webhook URL is automatically saved in your browser so you only enter it once</li>
+            </ol>
+            <div class="img-placeholder">⚠️ The webhook URL is sensitive — anyone with it can post to your channel. Keep it private and only paste it into this tool.</div>
+          </div>
+        </div>
+
+        <div class="setup-step">
+          <div class="step-num">Step 4 — For Each Dispatcher</div>
+          <div class="step-title">Share the webhook, not the page</div>
+          <div class="step-body">
+            Each dispatcher opens your GitHub Pages URL in their browser, then pastes the webhook URL once. It saves automatically after that. You can share the same webhook across all dispatchers — it posts to the same channel regardless of who triggers it.
+            <br><br>
+            <strong>Want the webhook pre-loaded so dispatchers never have to enter it?</strong> Just ask and I can bake it directly into the HTML file — then it works out of the box for everyone.
+          </div>
+        </div>
+
+        <div class="setup-step">
+          <div class="step-num">Need a different channel per wave?</div>
+          <div class="step-title">Create multiple webhooks</div>
+          <div class="step-body">
+            In Step 2, you can create one webhook per channel. Each webhook is tied to one channel. If you want different waves to post to different Slack channels, just let me know and I can add multiple webhook fields.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- UPDATES TAB -->
+    <div class="tab-pane" id="pane-updates">
+      <div style="padding:20px;flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:14px;">
+
+        <div style="background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:10px 14px;font-size:12px;color:#fca5a5;line-height:1.6;">
+          Post a quick update to Slack for just the drivers whose assignments changed — without reposting the whole message.
+        </div>
+
+        <!-- QUEUED ENTRIES -->
+        <div id="updateEntries" style="display:flex;flex-direction:column;gap:6px;"></div>
+
+        <!-- ADD FORM — DA + CX# only -->
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;">
+          <div style="display:flex;gap:8px;align-items:center;">
+            <div style="flex:2;">
+              <div style="font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;text-transform:uppercase;margin-bottom:5px;">DA Name</div>
+              <input class="inp" id="updateDA" placeholder="e.g. Josue Cardoza" style="width:100%;">
+            </div>
+            <div style="flex:1;">
+              <div style="font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;text-transform:uppercase;margin-bottom:5px;">CX#</div>
+              <input class="inp" id="updateCX" placeholder="e.g. 176 or CX176" style="width:100%;font-family:'Space Mono',monospace;">
+            </div>
+            <button class="btn-primary" onclick="addUpdateEntry()" style="margin-top:auto;white-space:nowrap;padding:8px 18px;">Add →</button>
+          </div>
+          <div id="updateLookupStatus" style="font-size:11px;color:var(--muted);margin-top:8px;font-family:'Space Mono',monospace;min-height:16px;"></div>
+        </div>
+
+        <!-- PREVIEW -->
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+          <div style="padding:9px 14px;border-bottom:1px solid var(--border);font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);text-transform:uppercase;display:flex;align-items:center;justify-content:space-between;">
+            <span>📣 Update Preview</span>
+            <button class="copy-btn" onclick="copyUpdateMsg()">Copy</button>
+          </div>
+          <div id="updatePreview" style="padding:14px;font-family:monospace;font-size:12px;line-height:1.8;white-space:pre-wrap;color:var(--muted);min-height:60px;">Add a DA and CX# above to see the preview.</div>
+        </div>
+
+        <div style="display:flex;gap:8px;">
+          <button class="btn-primary" onclick="postUpdate()" id="postUpdateBtn" disabled style="flex:1;background:#611f69;">🚨 Post Update to Slack</button>
+          <button class="btn-sec" onclick="clearUpdates()">Clear All</button>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Add/Edit Affinity Modal -->
+<div class="modal-ov" id="addModal">
+  <div class="modal">
+    <div class="modal-title">
+      <span>Add / Edit Van Assignment</span>
+      <button class="modal-close" onclick="document.getElementById('addModal').classList.remove('show')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p>Enter the driver's full name exactly as it appears on the DOPS sheet, and the van to assign them to. This will be saved as a <strong>Manual</strong> entry with highest priority.</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px;">
+      <div>
+        <div style="font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;text-transform:uppercase;margin-bottom:4px;">Full DA Name (as on DOPS)</div>
+        <input class="inp" id="manualDA" placeholder="e.g. Josue Cardoza" style="width:100%;">
+      </div>
+      <div>
+        <div style="font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;text-transform:uppercase;margin-bottom:4px;">Van</div>
+        <input class="inp" id="manualVan" placeholder="e.g. Rivian 06" style="width:100%;">
+      </div>
+      <div>
+        <div style="font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;text-transform:uppercase;margin-bottom:4px;">Note (optional)</div>
+        <input class="inp" id="manualNote" placeholder="e.g. Grounded until Monday" style="width:100%;">
+      </div>
+      <button class="btn-primary" onclick="addManual()" style="margin-top:4px;">Save Assignment</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+// PRE-LOADED VAN AFFINITY
+// Built from your Jan 2024 EDV Affinity sheet — no daily upload needed.
+// These are the confirmed sheet assignments. Full name normalized → van.
+// ═══════════════════════════════════════════════════════════════════════
+const SHEET_AFFINITY = {
+  // Confirmed from EDV Affinity sheet (full DOPS name → van)
+  "amanda ruth petty":              "Rivian 02",
+  "brandon alexander o sick":       "Rivian 35",
+  "christopher michael treadwell":  "Rivian 26",
+  "cody glenn sapp":                "Rivian 48",
+  "daniel james engle":             "Rivian 16",
+  "donald charles byers":           "Rivian 18",
+  "erick serna":                    "Rivian 07",
+  "fionn ethan bowen":              "Rivian 46",
+  "hildeberto meneses vital":       "Rivian 49",
+  "isaac thomas harding":           "Rivian 04",
+  "jacob xavier mesa":              "Rivian 08",
+  "james anthony weimer":           "Rivian 23",
+  "jason brandon metcalf":          "Rivian 22",
+  "jose david valenzuela":          "Rivian 41",
+  "josue cardoza":                  "Rivian 06",
+  "kenneth lee rabb jr":            "Rivian 15",
+  "kirk andrew kostur":             "Rivian 40",
+  "lydia lynn karic":               "Rivian 01",
+  "sergio adrian dominguez":        "Rivian 39",
+  "sergio alouso gonzalezrenova":   "Rivian 12",
+  "shawnee nikkia deloney":         "Rivian 36",
+  "todd jason smith":               "Rivian 09",
+  // Additional sheet drivers (non-ZULT but in fleet — for learned cross-check)
+  "amanda p":    "Rivian 02", "erik s":       "Rivian 02",
+  "anthony e":   "Rivian 53", "easton g":     "Rivian 53",
+  "bob a":       "Rivian 46", "fionn b":      "Rivian 46",
+  "brandon c":   "Rivian 34", "matthew s":    "Rivian 34",
+  "brandon o":   "Rivian 35", "alec r":       "Rivian 36",
+  "christian a": "Rivian 17", "hector s":     "Rivian 17",
+  "carlos c":    "Rivian 12", "christopher t":"Rivian 26",
+  "kaden b":     "Rivian 26", "cody s":       "Rivian 48",
+  "alex l":      "Rivian 48", "daniel e":     "Rivian 16",
+  "donald b":    "Rivian 18", "jacob g":      "Rivian 18",
+  "erick s":     "Rivian 07", "hildeberto v": "Rivian 49",
+  "justin b":    "Rivian 49", "isaac h":      "Rivian 04",
+  "jacob m":     "Rivian 08", "nathaniel l":  "Rivian 08",
+  "james w":     "Rivian 23", "alberto c":    "Rivian 27",
+  "jason m":     "Rivian 22", "aron l":       "Rivian 22",
+  "jorge r":     "Rivian 11", "jose v":       "Rivian 41",
+  "josue c":     "Rivian 06", "kathryn g":    "Rivian 27",
+  "kenneth r":   "Rivian 15", "kerman m":     "Rivian 51",
+  "kirk k":      "Rivian 40", "kassandra u":  "Rivian 19",
+  "lizbeth t":   "Rivian 43", "ryan w":       "Rivian 43",
+  "lydia k":     "Rivian 01", "sergio d":     "Rivian 39",
+  "sergio g":    "Rivian 12", "shawnee d":    "Rivian 36",
+  "todd s":      "Rivian 09", "william b":    "Rivian 42",
+  "dane w":      "Rivian 42", "diego g":      "Rivian 05",
+  "dionte m":    "Rivian 30", "dylan g":      "Rivian 32",
+  "jason s":     "Rivian 32", "marc f":       "Rivian 44",
+  "marc v":      "Rivian 33", "marquies p":   "Rivian 31",
+  "victor a":    "Rivian 50", "elisa l":      "Rivian 45",
+  "brad n":      "Rivian 37", "phoenix f":    "Rivian 45",
+  "jerome i":    "Rivian 45", "kyle r":       "Rivian 54",
+};
+
+// Full fleet — nursery/dispatch vans excluded from auto-assignment pool
+const ALL_FLEET_VANS = [
+  "Rivian 01","Rivian 02","Rivian 03","Rivian 04","Rivian 05","Rivian 06","Rivian 07",
+  "Rivian 08","Rivian 09","Rivian 11","Rivian 12","Rivian 13","Rivian 14","Rivian 15",
+  "Rivian 16","Rivian 17","Rivian 18","Rivian 19","Rivian 20","Rivian 22","Rivian 23",
+  "Rivian 24","Rivian 26","Rivian 27","Rivian 30","Rivian 31","Rivian 32","Rivian 33",
+  "Rivian 34","Rivian 35","Rivian 36","Rivian 37","Rivian 38","Rivian 39","Rivian 40",
+  "Rivian 41","Rivian 42","Rivian 43","Rivian 44","Rivian 45","Rivian 46","Rivian 47",
+  "Rivian 48","Rivian 49","Rivian 50","Rivian 51","Rivian 53","Rivian 54","Rivian 55"
+  // Rivian 10, 21, 25, 28, 29 = NURSERY | Rivian 52 = DISPATCH
+];
+
+// ═══════════════════════════════════════════════════════════════════════
+// PERSISTENT STORAGE  (localStorage — works in browser, shared via URL)
+// Key: zult_affinity_v3
+// { manual: { normName: {van,note,date} }, learned: { normName: {van,count,first,last} } }
+// ═══════════════════════════════════════════════════════════════════════
+const SK = 'zult_affinity_v3';
+function getStore(){ try{const r=localStorage.getItem(SK);return r?JSON.parse(r):{manual:{},learned:{}};}catch{return{manual:{},learned:{}};} }
+function setStore(d){ try{localStorage.setItem(SK,JSON.stringify(d));}catch{} }
+
+// ═══════════════════════════════════════════════════════════════════════
+// NAME NORMALIZATION & MATCHING
+// ═══════════════════════════════════════════════════════════════════════
+function norm(n){ return String(n||'').toLowerCase().replace(/\s+/g,' ').trim(); }
+// "Josue Cardoza" → "josue c"
+function abbrev(n){ const p=norm(n).split(' ').filter(Boolean); return p.length<2?p[0]:p[0]+' '+p[p.length-1][0]; }
+
+// Try to match a full DOPS name against a sheet key (which may be abbreviated)
+function sheetMatch(fullName){
+  const fn=norm(fullName);
+  // Direct hit
+  if(SHEET_AFFINITY[fn]) return SHEET_AFFINITY[fn];
+  // Abbreviated key match
+  const ab=abbrev(fullName);
+  if(SHEET_AFFINITY[ab]) return SHEET_AFFINITY[ab];
+  // First-name + last-initial scan
+  const parts=fn.split(' ').filter(Boolean);
+  const first=parts[0], lastInit=parts[parts.length-1]?.[0];
+  for(const [k,v] of Object.entries(SHEET_AFFINITY)){
+    const kp=k.split(' ');
+    if(kp[0]===first && kp[1]===lastInit) return v;
+    if(kp[0]===first && kp.length===2 && lastInit && kp[1].startsWith(lastInit)) return v;
+  }
+  return null;
+}
+
+function lookupVan(fullName){
+  const store=getStore(), fn=norm(fullName);
+  if(store.manual[fn]) return {van:store.manual[fn].van, source:'manual'};
+  const sv=sheetMatch(fullName);
+  if(sv) return {van:sv, source:'sheet'};
+  if(store.learned[fn]) return {van:store.learned[fn].van, source:'learned'};
+  return {van:null, source:null};
+}
+
+function recordLearned(assignments){
+  const store=getStore(), today=new Date().toISOString().split('T')[0];
+  let dirty=false;
+  assignments.forEach(({fullName,van})=>{
+    if(!van)return;
+    const fn=norm(fullName);
+    if(store.manual[fn]) return;
+    if(sheetMatch(fullName)) return;
+    if(!store.learned[fn]){store.learned[fn]={van,count:1,first:today,last:today};}
+    else{store.learned[fn].van=van;store.learned[fn].count++;store.learned[fn].last=today;}
+    dirty=true;
+  });
+  if(dirty) setStore(store);
+}
+
+function getGrounded(){
+  try{const g=localStorage.getItem('zult_grounded');return g?JSON.parse(g):[];}catch{return[];}
+}
+function saveGrounded(list){try{localStorage.setItem('zult_grounded',JSON.stringify(list));}catch{}}
+
+function addGrounded(){
+  const inp=document.getElementById('newGrounded');
+  const van=inp.value.trim();
+  if(!van)return;
+  // Normalize: "07" → "Rivian 07", "rivian07" → "Rivian 07"
+  let v=van;
+  const numMatch=van.match(/^(\d+)$/);
+  const shortMatch=van.toLowerCase().match(/^rivian\s*(\d+)$/i);
+  if(numMatch) v=`Rivian ${numMatch[1].padStart(2,'0')}`;
+  else if(shortMatch) v=`Rivian ${shortMatch[1].padStart(2,'0')}`;
+  const list=getGrounded();
+  if(!list.includes(v)){list.push(v);saveGrounded(list);}
+  inp.value='';
+  renderGrounded();
+}
+function removeGrounded(van){
+  const list=getGrounded().filter(v=>v!==van);
+  saveGrounded(list);
+  renderGrounded();
+}
+function renderGrounded(){
+  const list=getGrounded();
+  const el=document.getElementById('groundedList');
+  el.innerHTML=list.length
+    ? list.map(v=>`<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:5px;padding:2px 8px;font-size:11px;font-family:'Space Mono',monospace;color:var(--danger);">${v}<button onclick="removeGrounded('${v}')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:12px;padding:0 0 0 3px;line-height:1;">✕</button></span>`).join('')
+    : '<span style="font-size:11px;color:var(--muted);">None</span>';
+}
+
+function getNextVan(usedToday){
+  const taken=new Set(usedToday);
+  // Exclude grounded vans
+  getGrounded().forEach(v=>taken.add(v));
+  // Also exclude vans already in sheet/learned/manual assignments
+  const store=getStore();
+  Object.values(store.manual).forEach(d=>taken.add(d.van));
+  return ALL_FLEET_VANS.find(v=>!taken.has(v))||null;
+}
+
+function updateBadge(){
+  const store=getStore();
+  const total=Object.keys(SHEET_AFFINITY).length+Object.keys(store.learned).length+Object.keys(store.manual).length;
+  document.getElementById('affinityBadge').textContent=`Affinity: ${total} entries`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// APP STATE
+// ═══════════════════════════════════════════════════════════════════════
+let routes=[], overrides={}, activeWaves=new Set(), selectedRoutes=new Set();
+let todayAssignments=new Map(); // populated on generate, used by query
+
+// ═══════════════════════════════════════════════════════════════════════
+// FILE LOADING
+// ═══════════════════════════════════════════════════════════════════════
+function loadDOPS(input){
+  const file=input.files[0]; if(!file)return;
+  const r=new FileReader();
+  r.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'binary'});
+      const ws=wb.Sheets['Solution'];
+      if(!ws){alert('Cannot find "Solution" sheet.');return;}
+      const data=XLSX.utils.sheet_to_json(ws);
+      routes=data
+        .filter(row=>String(row['DSP']||'').trim().toUpperCase()==='ZULT')
+        .map(row=>({
+          routeCode:String(row['Route Code']||'').trim(),
+          daId:String(row['DA_ID']||'').trim(),
+          daName:String(row['Suggested DA']||'').trim(),
+          serviceType:String(row['Service Type']||'').trim(),
+          wave:String(row['Wave']||'').trim().replace(/\s+/g,' '),
+          stagingLocation:String(row['Staging Location']||'').trim()
+        }));
+      const el=document.getElementById('dopsLoaded');
+      el.style.display='flex';
+      document.getElementById('dopsFileName').textContent=`${file.name} · ${routes.length} routes`;
+      document.getElementById('dopsZone').classList.add('loaded');
+      renderWaveFilter();
+      document.getElementById('generateBtn').disabled=routes.length===0;
+    }catch(err){alert('Error reading DOPS: '+err.message);}
+  };
+  r.readAsBinaryString(file);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// WAVE / PAD  (Pad3→Pad2→Pad1 cycling by wave time order)
+// ═══════════════════════════════════════════════════════════════════════
+function getPad(idx){ const c=idx%3; return c===0?3:c===1?2:1; }
+
+function renderWaveFilter(){
+  const waves=[...new Set(routes.map(r=>r.wave.trim()))].sort();
+  activeWaves=new Set(waves);
+  const c=document.getElementById('waveFilter'); c.innerHTML='';
+  const pLabels=['','Pad 1','Pad 2','Pad 3'];
+  waves.forEach((wave,i)=>{
+    const count=routes.filter(r=>r.wave===wave).length, pad=getPad(i);
+    const el=document.createElement('div'); el.className='wave-btn active'; el.dataset.wave=wave;
+    el.innerHTML=`<span><span class="pd pd${pad}"></span>${wave}</span><span style="display:flex;align-items:center;gap:4px;"><span style="font-size:10px;color:var(--pad${pad});">${pLabels[pad]}</span><span class="wc">${count}</span></span>`;
+    el.onclick=()=>{ if(activeWaves.has(wave)){activeWaves.delete(wave);el.classList.remove('active');}else{activeWaves.add(wave);el.classList.add('active');} };
+    c.appendChild(el);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// GENERATE MESSAGES
+// ═══════════════════════════════════════════════════════════════════════
+function generateMessages(){
+  const filtered=routes.filter(r=>activeWaves.has(r.wave));
+  if(!filtered.length){alert('No routes match active wave filters.');return;}
+  const allWaves=[...new Set(routes.map(r=>r.wave))].sort();
+  const padMap={}; allWaves.forEach((w,i)=>padMap[w]=getPad(i));
+  const pLabels=['','🔵 Pad 1','🟠 Pad 2','🟢 Pad 3'];
+  const station=document.getElementById('stationCode').value||'DTU6';
+
+  // Build assignments
+  todayAssignments=new Map();
+  const vanUsedToday=new Set();
+  const newAssigns=[];
+
+  // Pass 1: known
+  filtered.forEach(r=>{
+    const k=norm(r.daName); if(todayAssignments.has(k))return;
+    const result=lookupVan(r.daName);
+    if(result.van){todayAssignments.set(k,result);vanUsedToday.add(result.van);}
+  });
+  // Pass 2: new drivers
+  filtered.forEach(r=>{
+    const k=norm(r.daName); if(todayAssignments.has(k))return;
+    const next=getNextVan([...vanUsedToday]);
+    if(next){todayAssignments.set(k,{van:next,source:'new'});vanUsedToday.add(next);newAssigns.push({fullName:r.daName,van:next});}
+    else{todayAssignments.set(k,{van:null,source:null});}
+  });
+  recordLearned(newAssigns);
+  updateBadge();
+
+  const waves=[...new Set(filtered.map(r=>r.wave))].sort();
+  const grouped={}; filtered.forEach(r=>{if(!grouped[r.wave])grouped[r.wave]=[];grouped[r.wave].push(r);});
+
+  const content=document.getElementById('mainContent'); content.innerHTML=''; selectedRoutes=new Set();
+
+  waves.forEach(wave=>{
+    const waveRoutes=grouped[wave];
+    if(!waveRoutes||!waveRoutes.length)return;
+    const wr=waveRoutes, pad=padMap[wave]||1, wid=wave.replace(/[:\s]/g,'_');
+    const pbCls=['','pb1','pb2','pb3'][pad];
+    const rows=wr.map(r=>{
+      const rcx=overrides[r.routeCode]||r.routeCode, ov=!!overrides[r.routeCode];
+      const asgn=todayAssignments.get(norm(r.daName))||{van:null,source:null};
+      const id=`${r.daId}_${r.routeCode}`;
+      const cxEl=ov?`<span class="cxo">${rcx}</span>`:`<span class="cx">${rcx}</span>`;
+      let vEl,vSrc='';
+      if(!asgn.van){vEl=`<span class="vtag v-none">No Van</span>`;}
+      else{
+        const s=asgn.source, cls=s==='new'?'v-new':s==='learned'?'v-learned':'v-sheet';
+        const lbl=s==='new'?'New':s==='learned'?'Learned':s==='manual'?'Manual':'Sheet';
+        vEl=`<span class="vtag ${cls}">${asgn.van}</span>`;
+        vSrc=`<span class="vsrc">${lbl}</span>`;
+      }
+      return `<tr>
+        <td style="width:34px"><input type="checkbox" class="chk" data-id="${id}" onchange="toggleRoute('${id}',this)"></td>
+        <td style="font-size:13px;">${r.daName}</td>
+        <td>${cxEl}</td>
+        <td class="stg">${r.stagingLocation}</td>
+        <td><div class="van-cell">${vEl}${vSrc}</div></td>
+      </tr>`;
+    }).join('');
+
+    const msgText=buildMsg(wr,wave,pad,pLabels[pad],station);
+    const sec=document.createElement('div'); sec.className='wave-group';
+    sec.innerHTML=`
+      <div class="wave-hdr" onclick="toggleSec(this)">
+        <span class="wave-time">🌊 ${wave}</span>
+        <span class="pad-badge ${pbCls}">${pLabels[pad]}</span>
+        <span class="wave-ct">${wr.length} routes ▾</span>
+      </div>
+      <div class="sel-all-row">
+        <input type="checkbox" class="chk" onchange="toggleWaveSel(this)"> Select all in this wave
+      </div>
+      <table class="rtbl">
+        <thead><tr><th style="width:34px">✓</th><th>DA Name</th><th>CX#</th><th>Staging</th><th>Van</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="preview-box">
+        <div class="preview-hdr"><span>📣 Slack Preview</span><button class="copy-btn" onclick="copyMsg('${wid}')" >Copy</button></div>
+        <div class="preview-body" id="msg_${wid}">${msgText}</div>
+      </div>`;
+    content.appendChild(sec);
+  });
+  // Store wave context for swap re-application
+  lastGeneratedWaves={waves,grouped,padMap,pLabels,station};
+  // Reset all edits on regenerate
+  routeSwaps=[];
+  cxAssignments={};
+  renderSwapPanel();
+  updateSelCount();
+  document.getElementById('postSlackBtn').disabled=false;
+}
+
+function buildMsg(wr,wave,pad,padLabel,station){
+  const lines=[
+    `📦 *${station} — Route Assignments* | ${padLabel} | 🕐 Wave: ${wave}`,
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,''
+  ];
+  wr.forEach(r=>{
+    const rcx=overrides[r.routeCode]||r.routeCode;
+    const asgn=todayAssignments.get(norm(r.daName));
+    const vStr=asgn&&asgn.van?` | 🚐 ${asgn.van}`:'';
+    lines.push(`👤 *${r.daName}*`);
+    lines.push(`   📍 ${r.stagingLocation}  |  🔖 ${rcx}${vStr}  |  ${padLabel}`);
+    lines.push('');
+  });
+  lines.push(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+  lines.push(`_Have a safe and productive day! 🚀_`);
+  return lines.join('\n');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// AFFINITY TABLE
+// ═══════════════════════════════════════════════════════════════════════
+function renderAffinityTable(){
+  const store=getStore(), q=(document.getElementById('affSearch')?.value||'').toLowerCase();
+  const entries=[];
+  // Manual
+  Object.entries(store.manual).forEach(([k,d])=>entries.push({key:k,van:d.van,source:'manual',info:d.note||'',extra:d.date||''}));
+  // Sheet (full names only — skip abbreviated duplicates)
+  const sheetDone=new Set();
+  Object.entries(SHEET_AFFINITY).forEach(([k,v])=>{
+    if(store.manual[k]) return;
+    if(k.length<=12&&k.includes(' ')&&k.split(' ')[1]?.length===1) return; // skip abbreviated
+    if(!sheetDone.has(v+k)){sheetDone.add(v+k);entries.push({key:k,van:v,source:'sheet',info:'',extra:''});}
+  });
+  // Learned
+  Object.entries(store.learned).forEach(([k,d])=>{
+    if(store.manual[k]||sheetMatch(k)) return;
+    entries.push({key:k,van:d.van,source:'learned',info:`${d.count}x`,extra:`last: ${d.last}`});
+  });
+  const filtered=q?entries.filter(e=>e.key.includes(q)||e.van.toLowerCase().includes(q)):entries;
+  filtered.sort((a,b)=>({manual:0,sheet:1,learned:2}[a.source]-{manual:0,sheet:1,learned:2}[b.source])||a.key.localeCompare(b.key));
+  const wrap=document.getElementById('affTableWrap');
+  if(!filtered.length){wrap.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px;">No entries found</div>';return;}
+  wrap.innerHTML=`<table class="atbl">
+    <thead><tr><th>Driver</th><th>Van</th><th>Source</th><th>Info</th><th></th></tr></thead>
+    <tbody>${filtered.map(e=>`<tr>
+      <td style="font-size:12px;max-width:220px;word-break:break-word;">${e.key}</td>
+      <td><span class="vtag ${e.source==='learned'?'v-learned':'v-sheet'}" style="font-size:10px;">${e.van}</span></td>
+      <td><span class="src-badge s-${e.source}">${e.source}</span></td>
+      <td style="font-size:11px;color:var(--muted);">${e.info} ${e.extra}</td>
+      <td>${e.source!=='sheet'?`<button class="btn-rm" onclick="removeEntry('${e.source}','${e.key.replace(/'/g,"\\'")}')">✕</button>`:''}</td>
+    </tr>`).join('')}
+    </tbody></table>`;
+}
+
+function openAddModal(){ document.getElementById('addModal').classList.add('show'); }
+function addManual(){
+  const da=document.getElementById('manualDA').value.trim();
+  const van=document.getElementById('manualVan').value.trim();
+  const note=document.getElementById('manualNote').value.trim();
+  if(!da||!van){alert('Enter a driver name and van.');return;}
+  const store=getStore();
+  store.manual[norm(da)]={van,note,date:new Date().toISOString().split('T')[0]};
+  setStore(store);
+  document.getElementById('manualDA').value=''; document.getElementById('manualVan').value=''; document.getElementById('manualNote').value='';
+  document.getElementById('addModal').classList.remove('show');
+  renderAffinityTable(); updateBadge();
+}
+function removeEntry(type,key){
+  const store=getStore(); delete store[type][key]; setStore(store);
+  renderAffinityTable(); updateBadge();
+}
+function clearLearned(){
+  if(!confirm('Clear all learned assignments? Sheet and manual entries are kept.'))return;
+  const store=getStore(); store.learned={}; setStore(store);
+  renderAffinityTable(); updateBadge();
+}
+function exportAffinity(){
+  const store=getStore();
+  const rows=[['Driver','Van','Source','Info']];
+  Object.entries(store.manual).forEach(([k,d])=>rows.push([k,d.van,'manual',d.note||'']));
+  Object.entries(SHEET_AFFINITY).forEach(([k,v])=>{if(!store.manual[k]&&!(k.length<=12&&k.split(' ')[1]?.length===1))rows.push([k,v,'sheet','']);});
+  Object.entries(store.learned).forEach(([k,d])=>{if(!store.manual[k]&&!sheetMatch(k))rows.push([k,d.van,'learned',`${d.count}x ${d.last}`]);});
+  const csv=rows.map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
+  const a=document.createElement('a'); a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv); a.download='van_affinity.csv'; a.click();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// QUERY ENGINE
+// ═══════════════════════════════════════════════════════════════════════
+function setQ(q){ document.getElementById('queryInput').value=q; runQuery(); }
+function runQuery(){
+  const q=document.getElementById('queryInput').value.trim().toLowerCase();
+  if(!q)return;
+  const store=getStore();
+  let answer='';
+
+  // "show all" / "full list" / "all assignments"
+  if(/show all|all assignments|full list|complete list/.test(q)){
+    const lines=['📋 FULL VAN AFFINITY LIST\n'];
+    // Sheet entries
+    const seen=new Set();
+    Object.entries(SHEET_AFFINITY).forEach(([k,v])=>{
+      if(k.length<=12&&k.split(' ')[1]?.length===1)return;
+      if(seen.has(v))return; seen.add(v);
+      lines.push(`${v.padEnd(12)} → ${k}`);
+    });
+    // Learned
+    Object.entries(store.learned).forEach(([k,d])=>{ if(!sheetMatch(k))lines.push(`${d.van.padEnd(12)} → ${k} (learned)`); });
+    // Manual
+    Object.entries(store.manual).forEach(([k,d])=>lines.push(`${d.van.padEnd(12)} → ${k} (manual)`));
+    answer=lines.join('\n');
+  }
+  // "who drives / what van is [name]"
+  else if(/who drives|what van|which van|van for|assigned to/.test(q)||/rivian/i.test(q)===false){
+    // Try to extract a name from the query
+    const stopWords=['who','drives','what','van','is','which','for','assigned','to','in','the','does','drive'];
+    const words=q.split(/\s+/).filter(w=>!stopWords.includes(w)&&w.length>1);
+    const nameGuess=words.join(' ');
+    if(nameGuess){
+      // Search sheet + learned + manual for partial matches
+      const matches=[];
+      [...Object.entries(SHEET_AFFINITY),...Object.entries(store.learned).map(([k,d])=>[k,d.van]),...Object.entries(store.manual).map(([k,d])=>[k,d.van])]
+        .forEach(([k,v])=>{ if(typeof v==='object')v=v.van; if(k.includes(nameGuess)||nameGuess.split(' ').every(p=>k.includes(p))) matches.push({k,v}); });
+      const uniq=[...new Map(matches.map(m=>[m.k,m])).values()];
+      if(uniq.length===0) answer=`No driver matching "${nameGuess}" found in affinity records.\n\nIf this is a new driver, they'll be auto-assigned a van when you generate today's messages.`;
+      else answer=uniq.map(m=>`👤 ${m.k}\n   🚐 ${m.v}`).join('\n\n');
+    }
+  }
+  // "who is in rivian XX" / "who drives rivian XX"
+  if(/rivian\s*\d+/i.test(q)){
+    const vanMatch=q.match(/rivian\s*(\d+)/i);
+    const vanNum=vanMatch?parseInt(vanMatch[1]):null;
+    if(vanNum!==null){
+      const van=`Rivian ${String(vanNum).padStart(2,'0')}`;
+      const drivers=[];
+      Object.entries(SHEET_AFFINITY).forEach(([k,v])=>{ if(v===van&&!(k.length<=12&&k.split(' ')[1]?.length===1))drivers.push({k,src:'sheet'}); });
+      Object.entries(store.learned).forEach(([k,d])=>{ if(d.van===van&&!sheetMatch(k))drivers.push({k,src:'learned'}); });
+      Object.entries(store.manual).forEach(([k,d])=>{ if(d.van===van)drivers.push({k,src:'manual'}); });
+      if(!drivers.length) answer=`No driver currently assigned to ${van}.`;
+      else answer=`🚐 ${van}\n\n`+drivers.map(d=>`👤 ${d.k}  (${d.src})`).join('\n');
+    }
+  }
+  // "unassigned vans"
+  if(/unassigned|available|free|empty/.test(q)){
+    const allAssigned=new Set([
+      ...Object.values(SHEET_AFFINITY),
+      ...Object.values(store.learned).map(d=>d.van),
+      ...Object.values(store.manual).map(d=>d.van)
+    ]);
+    const unassigned=ALL_FLEET_VANS.filter(v=>!allAssigned.has(v));
+    answer=unassigned.length?`🚐 Unassigned vans (${unassigned.length}):\n\n`+unassigned.join('  ·  '):'All fleet vans are currently assigned! 🎉';
+  }
+  // "new drivers today"
+  if(/new drivers|new today|first time/.test(q)){
+    const newOnes=[...todayAssignments.entries()].filter(([,v])=>v.source==='new');
+    answer=newOnes.length?`🆕 New drivers today (${newOnes.length}):\n\n`+newOnes.map(([k,v])=>`👤 ${k}  →  🚐 ${v.van}  (auto-assigned)`).join('\n'):'No new drivers today — everyone is in the affinity system.';
+  }
+  // "today's assignments"
+  if(/today|current.*assign|today.*assign/.test(q)&&todayAssignments.size){
+    const lines=['📦 TODAY\'S ASSIGNMENTS\n'];
+    todayAssignments.forEach((v,k)=>{ if(v.van)lines.push(`${(v.van||'—').padEnd(12)} → ${k}  (${v.source})`); });
+    answer=lines.join('\n');
+  }
+
+  if(!answer) answer=`I didn't quite catch that. Try:\n• "What van is [driver name] in?"\n• "Who drives Rivian 06?"\n• "Show all assignments"\n• "Which vans are unassigned?"\n• "Who are the new drivers today?"`;
+
+  const results=document.getElementById('queryResults');
+  const box=document.createElement('div'); box.className='query-box';
+  box.innerHTML=`<div class="query-hdr">Result</div><div class="query-body">${escHtml(answer)}</div>`;
+  results.innerHTML=''; results.appendChild(box);
+}
+function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ═══════════════════════════════════════════════════════════════════════
+// ROUTE SWAPS + CX ASSIGNMENTS
+// Works ACROSS waves — swaps are applied globally then per-wave previews refresh
+// ═══════════════════════════════════════════════════════════════════════
+let routeSwaps=[];    // [{fromDA, toDA}] DA↔DA route swaps
+let cxAssignments={}; // {cxCode: daName} — override who is on a specific CX#
+let lastGeneratedWaves=null;
+
+// ── Find a route anywhere in all waves by partial DA name ────────────────
+function findRouteGlobal(name){
+  if(!lastGeneratedWaves)return null;
+  const n=name.toLowerCase().trim();
+  for(const wave of lastGeneratedWaves.waves){
+    const wr=lastGeneratedWaves.grouped[wave]||[];
+    const found=wr.find(r=>r.daName.toLowerCase().includes(n)||norm(r.daName).includes(n));
+    if(found)return found;
+  }
+  return null;
+}
+
+// ── Find a route by CX# anywhere in all waves ───────────────────────────
+function findRouteByCX(cx){
+  if(!lastGeneratedWaves)return null;
+  const c=cx.toUpperCase().trim();
+  for(const wave of lastGeneratedWaves.waves){
+    const wr=lastGeneratedWaves.grouped[wave]||[];
+    const found=wr.find(r=>(overrides[r.routeCode]||r.routeCode).toUpperCase()===c||r.routeCode.toUpperCase()===c);
+    if(found)return {route:found,wave};
+  }
+  return null;
+}
+
+function toggleSwapPanel(){
+  const p=document.getElementById('swapPanel');
+  const btn=document.getElementById('swapToggle');
+  const open=p.style.display==='none';
+  p.style.display=open?'block':'none';
+  btn.style.background=open?'rgba(250,204,21,.25)':'';
+}
+
+// ── DA ↔ DA swap ─────────────────────────────────────────────────────────
+function addSwap(){
+  const fromInp=document.getElementById('swapFrom');
+  const toInp=document.getElementById('swapTo');
+  const fromDA=fromInp.value.trim();
+  const toDA=toInp.value.trim();
+  if(!fromDA||!toDA){alert('Enter both driver names.');return;}
+  if(fromDA.toLowerCase()===toDA.toLowerCase()){alert('Cannot swap a driver with themselves.');return;}
+  // Validate both exist in today's routes
+  if(!findRouteGlobal(fromDA)){alert(`Could not find "${fromDA}" in today\'s routes. Check the spelling.`);return;}
+  if(!findRouteGlobal(toDA)){alert(`Could not find "${toDA}" in today\'s routes. Check the spelling.`);return;}
+  routeSwaps.push({fromDA,toDA});
+  fromInp.value=''; toInp.value='';
+  renderSwapPanel();
+  applyAllEdits();
+}
+
+function removeSwap(idx){
+  routeSwaps.splice(idx,1);
+  renderSwapPanel();
+  applyAllEdits();
+}
+
+// ── CX# → DA assignment ──────────────────────────────────────────────────
+function addCXAssignment(){
+  const cxInp=document.getElementById('cxAssignCX');
+  const daInp=document.getElementById('cxAssignDA');
+  const cx=cxInp.value.trim().toUpperCase().replace(/^CX/i,'');
+  const da=daInp.value.trim();
+  if(!cx||!da){alert('Enter both a CX# and a driver name.');return;}
+  const cxCode='CX'+cx;
+  // Check CX exists in today's routes
+  const found=findRouteByCX(cxCode);
+  if(!found){alert(`CX# ${cxCode} not found in today\'s ZULT routes.`);return;}
+  cxAssignments[cxCode]=da;
+  cxInp.value=''; daInp.value='';
+  renderSwapPanel();
+  applyAllEdits();
+}
+
+function removeCXAssignment(cx){
+  delete cxAssignments[cx];
+  renderSwapPanel();
+  applyAllEdits();
+}
+
+function renderSwapPanel(){
+  // DA↔DA swaps
+  const swapEl=document.getElementById('swapList');
+  swapEl.innerHTML=routeSwaps.length
+    ? routeSwaps.map((s,i)=>`
+        <div style="display:flex;align-items:center;gap:8px;padding:5px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;font-size:12px;">
+          <span style="font-family:'Space Mono',monospace;color:var(--accent2);">${s.fromDA}</span>
+          <span style="color:var(--muted);">↔</span>
+          <span style="font-family:'Space Mono',monospace;color:var(--accent2);">${s.toDA}</span>
+          <span style="color:var(--muted);font-size:10px;margin-left:4px;">routes swapped</span>
+          <button onclick="removeSwap(${i})" class="btn-rm" style="margin-left:auto;">✕</button>
+        </div>`).join('')
+    : '';
+
+  // CX# assignments
+  const cxEl=document.getElementById('cxAssignList');
+  const cxEntries=Object.entries(cxAssignments);
+  cxEl.innerHTML=cxEntries.length
+    ? cxEntries.map(([cx,da])=>`
+        <div style="display:flex;align-items:center;gap:8px;padding:5px 10px;background:var(--surface2);border:1px solid rgba(56,189,248,.3);border-radius:6px;font-size:12px;">
+          <span class="cx">${cx}</span>
+          <span style="color:var(--muted);">→</span>
+          <span style="font-family:'Space Mono',monospace;color:var(--info);">${da}</span>
+          <button onclick="removeCXAssignment('${cx}')" class="btn-rm" style="margin-left:auto;">✕</button>
+        </div>`).join('')
+    : '';
+}
+
+// ── Master apply: build globally-patched route list, then refresh each wave preview ──
+function applyAllEdits(){
+  if(!lastGeneratedWaves)return;
+  const {waves,grouped,padMap,pLabels,station}=lastGeneratedWaves;
+
+  // Step 1: Build flat cloned list of ALL routes across all waves
+  // Each route also carries _van and _vanSource from todayAssignments
+  const allRoutes=[];
+  waves.forEach(wave=>{
+    (grouped[wave]||[]).forEach(r=>{
+      const asgn=todayAssignments.get(norm(r.daName))||{van:null,source:null};
+      allRoutes.push({...r,_wave:wave,_van:asgn.van,_vanSource:asgn.source});
+    });
+  });
+
+  // Step 2: Apply CX# → DA assignments
+  // The new DA brings their own affinity-based van
+  Object.entries(cxAssignments).forEach(([cx,newDA])=>{
+    const r=allRoutes.find(r=>(overrides[r.routeCode]||r.routeCode).toUpperCase()===cx||r.routeCode.toUpperCase()===cx);
+    if(!r)return;
+    const oldDA=r.daName;
+    r.daName=newDA;
+    // Look up van for new DA via affinity
+    const vanResult=lookupVan(newDA);
+    r._van=vanResult.van||r._van; // keep old van if no affinity found
+    r._vanSource=vanResult.van?vanResult.source:'learned';
+    // Update todayAssignments so buildMsg picks up the new van
+    if(vanResult.van) todayAssignments.set(norm(newDA),{van:vanResult.van,source:vanResult.source});
+    else todayAssignments.set(norm(newDA),todayAssignments.get(norm(oldDA))||{van:null,source:null});
+  });
+
+  // Step 3: Apply DA↔DA swaps
+  // Each DA keeps THEIR OWN VAN — only route details (CX#, staging, wave) swap
+  routeSwaps.forEach(({fromDA,toDA})=>{
+    const n1=fromDA.toLowerCase().trim();
+    const n2=toDA.toLowerCase().trim();
+    const rA=allRoutes.find(r=>r.daName.toLowerCase().includes(n1)||norm(r.daName).includes(n1));
+    const rB=allRoutes.find(r=>r.daName.toLowerCase().includes(n2)||norm(r.daName).includes(n2));
+    if(!rA||!rB){console.warn(`Swap: couldn\'t find "${fromDA}" or "${toDA}" in routes`);return;}
+    // Swap route details only — van stays with the DA
+    [rA.routeCode,rB.routeCode]=[rB.routeCode,rA.routeCode];
+    [rA.stagingLocation,rB.stagingLocation]=[rB.stagingLocation,rA.stagingLocation];
+    [rA._wave,rB._wave]=[rB._wave,rA._wave];
+    // Van stays with the DA — no van swap needed
+    // But update todayAssignments so buildMsg uses correct van per DA
+    // (it already does via norm(r.daName) lookup — no change needed here)
+  });
+
+  // Step 4: Regroup by wave, update todayAssignments from _van, refresh previews
+  const newGrouped={};
+  allRoutes.forEach(r=>{
+    if(!newGrouped[r._wave])newGrouped[r._wave]=[];
+    newGrouped[r._wave].push(r);
+    // Keep todayAssignments in sync for buildMsg van lookup
+    if(r._van && !todayAssignments.has(norm(r.daName))){
+      todayAssignments.set(norm(r.daName),{van:r._van,source:r._vanSource||'sheet'});
+    }
+  });
+
+  waves.forEach(wave=>{
+    const wid=wave.replace(/:/g,'_').replace(/\s/g,'_');
+    const previewEl=document.getElementById('msg_'+wid);
+    if(!previewEl)return;
+    const wr=newGrouped[wave]||[];
+    const pad=padMap[wave];
+    previewEl.textContent=buildMsg(wr,wave,pad,pLabels[pad],station);
+  });
+
+  // Expose patched routes for the update message feature
+  lastPatchedRoutes=allRoutes;
+}
+
+// Track patched state for update messages
+let lastPatchedRoutes=[];
+
+// ═══════════════════════════════════════════════════════════════════════
+// LAST-MINUTE UPDATES
+// DA name + CX# only — bot looks up staging/van/pad from today's routes
+// ═══════════════════════════════════════════════════════════════════════
+let updateEntries = []; // [{ da, cx, staging, van, pad, wave }]
+
+function addUpdateEntry(){
+  const daRaw = document.getElementById('updateDA').value.trim();
+  const cxRaw = document.getElementById('updateCX').value.trim();
+  const status = document.getElementById('updateLookupStatus');
+
+  if(!daRaw || !cxRaw){ alert('Enter both a DA name and a CX#.'); return; }
+
+  // Normalize CX — accept "176" or "CX176"
+  const cx = 'CX' + cxRaw.replace(/^cx/i,'').replace(/^CX/i,'');
+
+  // Look up the CX# in today's patched routes (lastPatchedRoutes) or original routes
+  const routePool = lastPatchedRoutes.length ? lastPatchedRoutes : routes;
+  const match = routePool.find(r =>
+    (overrides[r.routeCode] || r.routeCode).toUpperCase() === cx.toUpperCase() ||
+    r.routeCode.toUpperCase() === cx.toUpperCase()
+  );
+
+  // Get van from affinity for this DA
+  const vanResult = lookupVan(daRaw);
+  const van = vanResult.van || '—';
+
+  // Get pad label from wave if we found the route
+  let staging = '—', wave = '', pad = '';
+  const allWaves = [...new Set(routes.map(r=>r.wave))].sort();
+  const padMap = {}; allWaves.forEach((w,i) => padMap[w] = getPad(i));
+  const pLabels = ['','🔵 Pad 1','🟠 Pad 2','🟢 Pad 3'];
+
+  if(match){
+    staging = match.stagingLocation || '—';
+    wave    = match._wave || match.wave || '';
+    pad     = wave ? (pLabels[padMap[wave]] || '') : '';
+    status.style.color = 'var(--accent)';
+    status.textContent = `✓ Found ${cx} — Staging: ${staging} | Van: ${van} | ${pad}`;
+  } else {
+    status.style.color = 'var(--accent2)';
+    status.textContent = `⚠ ${cx} not found in today's routes — assignment added without auto-fill.`;
+  }
+
+  updateEntries.push({ da: daRaw, cx, staging, van, pad, wave });
+
+  document.getElementById('updateDA').value = '';
+  document.getElementById('updateCX').value = '';
+  setTimeout(() => { status.textContent = ''; }, 4000);
+
+  renderUpdateEntries();
+}
+
+function removeUpdateEntry(idx){
+  updateEntries.splice(idx, 1);
+  renderUpdateEntries();
+}
+
+function renderUpdateEntries(){
+  const el = document.getElementById('updateEntries');
+  el.innerHTML = updateEntries.length
+    ? updateEntries.map((e,i) => `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;">
+          <span style="font-size:13px;">👤</span>
+          <span style="font-weight:600;color:var(--text);flex:1;">${e.da}</span>
+          <span class="cx" style="font-size:12px;">${e.cx}</span>
+          <span class="stg" style="font-size:11px;">${e.staging}</span>
+          <span style="font-size:11px;color:var(--accent2);">${e.van !== '—' ? '🚐 '+e.van : ''}</span>
+          <span style="font-size:11px;color:var(--muted);">${e.pad}</span>
+          <button onclick="removeUpdateEntry(${i})" class="btn-rm">✕</button>
+        </div>`).join('')
+    : '';
+
+  buildUpdatePreview();
+  document.getElementById('postUpdateBtn').disabled = updateEntries.length === 0;
+}
+
+function buildUpdatePreview(){
+  const station = document.getElementById('stationCode').value || 'DTU6';
+  const time    = new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  const el      = document.getElementById('updatePreview');
+
+  if(!updateEntries.length){
+    el.style.color = 'var(--muted)';
+    el.textContent = 'Add a DA and CX# above to see the preview.';
+    return;
+  }
+
+  el.style.color = 'var(--text)';
+  const lines = [
+    `📦 *${station} — Updated Assignment* | ${time}`,
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    ''
+  ];
+
+  updateEntries.forEach(e => {
+    const details = [];
+    if(e.staging && e.staging !== '—') details.push(`📍 ${e.staging}`);
+    details.push(`🔖 ${e.cx}`);
+    if(e.van && e.van !== '—')         details.push(`🚐 ${e.van}`);
+    if(e.pad)                           details.push(e.pad);
+
+    lines.push(`👤 *${e.da}*`);
+    lines.push(`   ${details.join('  |  ')}`);
+    lines.push('');
+  });
+
+  lines.push(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+  el.textContent = lines.join('\n');
+}
+
+function copyUpdateMsg(){
+  const el = document.getElementById('updatePreview');
+  navigator.clipboard.writeText(el.textContent.trim()).then(() => {
+    const btn = document.querySelector('button[onclick="copyUpdateMsg()"]');
+    if(btn){ btn.textContent='Copied!'; btn.classList.add('copied'); setTimeout(()=>{ btn.textContent='Copy'; btn.classList.remove('copied'); }, 2000); }
+  });
+}
+
+async function postUpdate(){
+  const url = getWebhook();
+  if(!url){ alert('Paste your Slack Incoming Webhook URL in Slack Config on the left.'); return; }
+  if(!updateEntries.length){ alert('Add at least one update first.'); return; }
+  buildUpdatePreview();
+  const msg = document.getElementById('updatePreview').textContent.trim();
+  try{
+    const r = await fetch(url, { method:'POST', body: JSON.stringify({ text: msg }) });
+    if(r.ok){ alert('✅ Update posted to Slack!'); clearUpdates(); }
+    else { const t = await r.text(); alert('Slack error: '+t); console.error(t); }
+  } catch(e){ alert('Network error. Check console (F12).'); console.error(e); }
+}
+
+function clearUpdates(){
+  updateEntries = [];
+  renderUpdateEntries();
+}
+// ═══════════════════════════════════════════════════════════════════════
+// OVERRIDES
+// ═══════════════════════════════════════════════════════════════════════
+function addOverride(){
+  const f=document.getElementById('newFrom').value.trim().toUpperCase();
+  const t=document.getElementById('newTo').value.trim().toUpperCase();
+  if(!f||!t)return; overrides[f]=t;
+  document.getElementById('newFrom').value=''; document.getElementById('newTo').value='';
+  renderOverrides();
+}
+function removeOverride(k){delete overrides[k];renderOverrides();}
+function renderOverrides(){
+  document.getElementById('overrideList').innerHTML=Object.entries(overrides).map(([f,t])=>`
+    <div class="override-row">
+      <span class="cx" style="padding:6px 9px;background:var(--surface2);border-radius:6px;border:1px solid var(--border);">${f}</span>
+      <span class="cxo" style="padding:6px 9px;background:var(--surface2);border-radius:6px;border:1px solid var(--border);">${t}</span>
+      <button class="btn-rm" onclick="removeOverride('${f}')">✕</button>
+    </div>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════════════════════════════════════
+function switchMainTab(id){
+  document.querySelectorAll('.tab-main').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  document.getElementById('mainTab-'+id).classList.add('active');
+  document.getElementById('pane-'+id).classList.add('active');
+  if(id==='affinity') renderAffinityTable();
+}
+function toggleSec(hdr){
+  [hdr.nextElementSibling,hdr.nextElementSibling?.nextElementSibling,hdr.nextElementSibling?.nextElementSibling?.nextElementSibling]
+    .forEach(el=>{if(el)el.style.display=el.style.display==='none'?'':'none';});
+}
+function toggleRoute(id,cb){if(cb.checked)selectedRoutes.add(id);else selectedRoutes.delete(id);updateSelCount();}
+function toggleWaveSel(cb){
+  const g=cb.closest('.wave-group');
+  g.querySelectorAll('input.chk[data-id]').forEach(inp=>{inp.checked=cb.checked;if(cb.checked)selectedRoutes.add(inp.dataset.id);else selectedRoutes.delete(inp.dataset.id);});
+  updateSelCount();
+}
+function selectAll(){document.querySelectorAll('input.chk[data-id]').forEach(cb=>{cb.checked=true;selectedRoutes.add(cb.dataset.id);});updateSelCount();}
+function clearSel(){document.querySelectorAll('input.chk[data-id]').forEach(cb=>{cb.checked=false;});selectedRoutes.clear();updateSelCount();}
+function updateSelCount(){document.getElementById('selCount').textContent=selectedRoutes.size?`${selectedRoutes.size} selected`:''; }
+
+function copyMsg(wid){
+  const el=document.getElementById('msg_'+wid); if(!el)return;
+  navigator.clipboard.writeText(el.textContent.trim()).then(()=>{
+    const btn=document.querySelector(`button[onclick="copyMsg('${wid}')" ]`);
+    if(btn){btn.textContent='Copied!';btn.classList.add('copied');setTimeout(()=>{btn.textContent='Copy';btn.classList.remove('copied');},2000);}
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// SLACK  (uses Incoming Webhooks — no CORS issues from browser)
+// ═══════════════════════════════════════════════════════════════════════
+function getWebhook(){ return document.getElementById('webhookUrl').value.trim(); }
+
+async function testWebhook(){
+  const url=getWebhook();
+  if(!url){alert('Paste your Incoming Webhook URL first. See the Slack Setup tab.');return;}
+  if(!url.startsWith('https://hooks.slack.com/')){alert('That doesn\'t look like a Slack webhook URL. It should start with https://hooks.slack.com/services/');return;}
+  try{
+    const r=await fetch(url,{method:'POST',body:JSON.stringify({text:'✅ DTU6 Dispatch Bot connected successfully!'})});
+    if(r.ok){
+      document.getElementById('tokenStatus').textContent='✓ Webhook connected!';
+      document.getElementById('tokenDot').classList.add('ok');
+      // Save webhook to localStorage so dispatchers don't re-enter it
+      try{localStorage.setItem('zult_webhook',url);}catch{}
+    } else {
+      document.getElementById('tokenStatus').textContent='Error — check the webhook URL';
+    }
+  }catch(e){
+    document.getElementById('tokenStatus').textContent='Network error — check URL';
+    console.error(e);
+  }
+}
+
+async function postToSlack(){
+  const url=getWebhook();
+  if(!url){alert('Paste your Slack Incoming Webhook URL in the config on the left. See the Slack Setup tab for instructions.');return;}
+  // Apply any pending edits to make sure previews are current
+  applyAllEdits();
+  // Combine ALL wave previews into ONE message
+  const previews=[...document.querySelectorAll('.preview-body')];
+  if(!previews.length){alert('Generate messages first.');return;}
+  const today=new Date().toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
+  const station2=document.getElementById('stationCode').value||'DTU6';
+  const channel=document.getElementById('slackChannel').value||'#dispatch';
+  // Swap note is internal only — never included in the DA-facing Slack message
+  const header=`📋 *${station2} Daily Route Assignments — ${today}*\n${'━'.repeat(36)}`;
+  const combined=header+'\n\n'+previews.map(el=>el.textContent.trim()).filter(Boolean).join('\n\n');
+  if(!combined){alert('No message content to post.');return;}
+  try{
+    const r=await fetch(url,{method:'POST',body:JSON.stringify({text:combined})});
+    if(r.ok){alert(`✅ All assignments posted to Slack in one message!`);}
+    else{const t=await r.text();alert(`Slack error: ${t}\nCheck the browser console (F12).`);console.error(t);}
+  }catch(e){alert('Network error posting to Slack. Check console (F12).');console.error(e);}
+}
+
+// Restore saved webhook on load
+try{const w=localStorage.getItem('zult_webhook');if(w){document.getElementById('webhookUrl').value=w;document.getElementById('tokenStatus').textContent='Webhook saved';document.getElementById('tokenDot').classList.add('ok');}}catch{}
+
+// ═══════════════════════════════════════════════════════════════════════
+// MODAL CLOSE ON BACKDROP
+// ═══════════════════════════════════════════════════════════════════════
+document.querySelectorAll('.modal-ov').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show');}));
+document.getElementById('newTo').addEventListener('keydown',e=>{if(e.key==='Enter')addOverride();});
+document.getElementById('queryInput').addEventListener('keydown',e=>{if(e.key==='Enter')runQuery();});
+
+// INIT
+updateBadge();
+renderGrounded();
+renderUpdateEntries();
+document.getElementById('newGrounded').addEventListener('keydown',e=>{if(e.key==='Enter')addGrounded();});
+document.getElementById('swapFrom').addEventListener('keydown',e=>{if(e.key==='Tab'&&!e.shiftKey){e.preventDefault();document.getElementById('swapTo').focus();}});
+document.getElementById('swapTo').addEventListener('keydown',e=>{if(e.key==='Enter')addSwap();});
+document.getElementById('cxAssignCX').addEventListener('keydown',e=>{if(e.key==='Tab'&&!e.shiftKey){e.preventDefault();document.getElementById('cxAssignDA').focus();}});
+document.getElementById('cxAssignDA').addEventListener('keydown',e=>{if(e.key==='Enter')addCXAssignment();});
+document.getElementById('updateCX').addEventListener('keydown',e=>{if(e.key==='Enter')addUpdateEntry();});
+</script>
+</body>
+</html>
