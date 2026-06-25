@@ -1093,8 +1093,36 @@ function routeServiceClass(serviceType){
   if(/rivian/i.test(s)) return 'rivian';
   if(/extra large/i.test(s)) return 'xl';
   if(/large van/i.test(s)) return 'large';
-  // Default: Rivian (most common)
-  return 'rivian';
+  return 'rivian'; // Default
+}
+
+// Infer van class from van name — works WITHOUT VAN_SERVICE_MAP being loaded
+function vanClassFromName(van){
+  const v=(van||'').trim();
+  if(/^Rivian/i.test(v)) return 'rivian';
+  if(/^AZ-/i.test(v)) return 'xl';
+  if(/^Rental/i.test(v)){
+    // Try VAN_SERVICE_MAP first (accurate), fall back to name
+    const cls=VAN_SERVICE_MAP[normVan(v)];
+    if(cls) return cls;
+    // Rental XX LG → large, Rental XX XL → xl
+    if(/XL/i.test(v)) return 'xl';
+    return 'large'; // default rental = large
+  }
+  // Fall back to VAN_SERVICE_MAP
+  return VAN_SERVICE_MAP[normVan(v)]||'rivian';
+}
+
+// Check van+route compatibility using name-based classification
+function vanRouteCompatible(van, routeClass, isNursery){
+  if(isNursery) return true;
+  if(routeClass==='nursery') return true;
+  const vc=vanClassFromName(van);
+  // XL can cover large routes (bigger is ok), but Rivian cannot cover large/xl
+  if(routeClass==='large') return vc==='large'||vc==='xl';
+  if(routeClass==='xl')    return vc==='xl';
+  if(routeClass==='rivian') return vc==='rivian';
+  return true;
 }
 
 // Check if a van is compatible with a route service class
@@ -1271,8 +1299,7 @@ function generateMessages(){
       // Only reserve if compatible with this route's service type
       const isNursery=isNurseryRoute(r.daName);
       const rClass=routeServiceClass(r.serviceType);
-      const vanCls=VAN_SERVICE_MAP[nv];
-      const compatible=isNursery||!vanCls||vanCls===rClass||(rClass==='large'&&vanCls==='xl');
+      const compatible=vanRouteCompatible(result.van, rClass, isNursery);
       if(compatible){
         if(!vanClaimedBy.has(nv)) vanClaimedBy.set(nv, norm(r.daName));
         affinityReserved.add(nv);
@@ -1304,10 +1331,7 @@ function generateMessages(){
         // Check service type compatibility before assigning affinity van
         const isNursery=isNurseryRoute(r.daName);
         const rClass=routeServiceClass(r.serviceType);
-        const vanCls=VAN_SERVICE_MAP[nv];
-        // Compatible if: nursery DA, or no VAN_SERVICE_MAP entry yet, or types match
-        // XL van can serve large van routes too
-        const compatible=isNursery||!vanCls||vanCls===rClass||(rClass==='large'&&vanCls==='xl');
+        const compatible=vanRouteCompatible(result.van, rClass, isNursery);
         if(compatible){
           todayAssignments.set(k,result);
           vanUsedToday.add(result.van);
@@ -1371,8 +1395,7 @@ function generateMessages(){
         // Service type compliance check
         const _rClass=routeServiceClass(r.serviceType);
         const _nursery=isNurseryRoute(r.daName);
-        const _vanCls=VAN_SERVICE_MAP[normVan(asgn.van)];
-        const _ok=_nursery||_rClass==='nursery'||!_vanCls||_vanCls===_rClass||((_rClass==='large'||_rClass==='xl')&&_vanCls==='xl');
+        const _ok=vanRouteCompatible(asgn.van,_rClass,_nursery);
         const _warn=!_ok?`<span title="Van type doesn't match route service type" style="background:rgba(239,68,68,.2);color:#ef4444;border:1px solid rgba(239,68,68,.5);border-radius:3px;font-size:9px;padding:1px 4px;margin-left:3px;cursor:help;">⚠ TYPE</span>`:'';
         const _vanColor=asgn.van.startsWith('AZ')||asgn.van.startsWith('Rental')?'v-xl':cls;
         vEl=`<span class="vtag ${_vanColor}">${asgn.van}</span>${_warn}`;
@@ -1425,8 +1448,7 @@ function generateMessages(){
     const asgn=todayAssignments.get(norm(r.daName));
     if(!asgn||!asgn.van) return;
     const rc=routeServiceClass(r.serviceType);
-    const vc=VAN_SERVICE_MAP[normVan(asgn.van)];
-    const ok=isNurseryRoute(r.daName)||rc==='nursery'||!vc||vc===rc||((rc==='large'||rc==='xl')&&vc==='xl');
+    const ok=vanRouteCompatible(asgn.van,rc,isNurseryRoute(r.daName));
     if(!ok) mismatches++;
   });
   const compEl=document.getElementById('complianceWarn');
@@ -2261,7 +2283,7 @@ function exportToExcel(){
   const wb=XLSX.utils.book_new();
 
   const ws=XLSX.utils.aoa_to_sheet(sheetAOA);
-  ws['!cols']=[{wch:16},{wch:10},{wch:8},{wch:24},{wch:8},{wch:12},{wch:14},{wch:30},{wch:2},{wch:16},{wch:16}];
+  ws['!cols']=[{wch:16},{wch:10},{wch:8},{wch:24},{wch:8},{wch:12},{wch:14},{wch:30},{wch:4},{wch:16},{wch:16}];
   ws['!freeze']={xSplit:0,ySplit:1};
   ws['!autofilter']={ref:'A1:H1'};
 
