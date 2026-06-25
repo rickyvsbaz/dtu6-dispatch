@@ -1260,15 +1260,24 @@ function generateMessages(){
   const groundedSet=new Set(getGrounded().map(normVan));
 
   // Pre-pass: reserve each affinity van for the FIRST driver who claims it
-  // This prevents two drivers with the same affinity van from both getting it in Pass 1
+  // Only reserve if the van is compatible with the driver's route service type
+  // (prevents Rivians being reserved for Large Van routes, blocking Rivian DAs)
   const affinityReserved=new Set(); // normVan → reserved
   const vanClaimedBy=new Map();     // normVan → first daName that claims it
   filtered.forEach(r=>{
     const result=lookupVan(r.daName);
     if(result.van && !groundedSet.has(normVan(result.van))){
       const nv=normVan(result.van);
-      if(!vanClaimedBy.has(nv)) vanClaimedBy.set(nv, norm(r.daName));
-      affinityReserved.add(nv);
+      // Only reserve if compatible with this route's service type
+      const isNursery=isNurseryRoute(r.daName);
+      const rClass=routeServiceClass(r.serviceType);
+      const vanCls=VAN_SERVICE_MAP[nv];
+      const compatible=isNursery||!vanCls||vanCls===rClass||(rClass==='large'&&vanCls==='xl');
+      if(compatible){
+        if(!vanClaimedBy.has(nv)) vanClaimedBy.set(nv, norm(r.daName));
+        affinityReserved.add(nv);
+      }
+      // Incompatible affinity → don't reserve, driver goes to Pass 2 for correct van
     }
   });
 
@@ -1283,6 +1292,7 @@ function generateMessages(){
   });
 
   // Pass 1: assign each driver their affinity van
+  // Rules: affinity van must match the route's service type (unless nursery DA)
   // If two drivers share the same affinity van, only the first (primary) gets it
   filtered.forEach(r=>{
     const k=norm(r.daName); if(todayAssignments.has(k))return;
@@ -1291,8 +1301,19 @@ function generateMessages(){
       const nv=normVan(result.van);
       // Only assign if this driver is the designated claimant for this van
       if(vanClaimedBy.get(nv)===k){
-        todayAssignments.set(k,result);
-        vanUsedToday.add(result.van);
+        // Check service type compatibility before assigning affinity van
+        const isNursery=isNurseryRoute(r.daName);
+        const rClass=routeServiceClass(r.serviceType);
+        const vanCls=VAN_SERVICE_MAP[nv];
+        // Compatible if: nursery DA, or no VAN_SERVICE_MAP entry yet, or types match
+        // XL van can serve large van routes too
+        const compatible=isNursery||!vanCls||vanCls===rClass||(rClass==='large'&&vanCls==='xl');
+        if(compatible){
+          todayAssignments.set(k,result);
+          vanUsedToday.add(result.van);
+        }
+        // Incompatible affinity (e.g. Rivian assigned to Large Van route) → Pass 2
+        // will find the correct service type van instead
       }
       // Otherwise: secondary driver falls to Pass 2 to get next available
     }
