@@ -2158,7 +2158,7 @@ function exportToExcel(){
     wr.forEach((r,ri)=>{
       const rcx=overrides[r.routeCode]||r.routeCode;
       const asgn=todayAssignments.get(norm(r.daName))||{van:''};
-      routeRows.push({wave,pad,padLabel:pLabels[pad],daName:r.daName,cx:rcx,staging:r.stagingLocation,van:asgn.van||'',ri});
+      routeRows.push({wave,pad,padLabel:pLabels[pad],daName:r.daName,cx:rcx,staging:r.stagingLocation,van:asgn.van||'',serviceType:r.serviceType||'',ri});
     });
   });
 
@@ -2201,7 +2201,7 @@ function exportToExcel(){
   for(let r=0;r<totalRows+1;r++) sheetAOA.push(['','','','','','','','','','','','','']);
 
   // Main header row (row 0)
-  sheetAOA[0]=[dateStr,'Wave','Pad','Name','CX#','Staging','Van','','Grounded Vans','BACKUP VANS','','Standby/ADHOC',''];
+  sheetAOA[0]=[dateStr,'Wave','Pad','Name','CX#','Staging','Van','Service Type','','Grounded Vans','UNASSIGNED / BACKUP','',''];
 
   // Route data rows (rows 1..routeRows.length)
   routeRows.forEach((r,i)=>{
@@ -2212,36 +2212,37 @@ function exportToExcel(){
     sheetAOA[i+1][4]=r.cx;
     sheetAOA[i+1][5]=r.staging;
     sheetAOA[i+1][6]=r.van;
+    sheetAOA[i+1][7]=r.serviceType||'';
   });
 
   // Grounded/Backup header (row 1, cols 8-9)
-  sheetAOA[1][8]='Grounded Vans';
-  sheetAOA[1][9]='BACKUP VANS';
+  sheetAOA[1][9]='Grounded Vans';
+  sheetAOA[1][10]='UNASSIGNED / BACKUP';
 
   // Grounded/Backup data rows
   sideData.forEach((d,i)=>{
-    sheetAOA[i+2][8]=d.g;
-    sheetAOA[i+2][9]=d.b;
+    sheetAOA[i+2][9]=d.g;
+    sheetAOA[i+2][10]=d.b;
   });
 
   // Standby section — placed after grounded block
   const sbHdrRow=maxVans+2; // row after grounded data + blank gap
-  sheetAOA[sbHdrRow][8]='Standby/ADHOC';
-  sheetAOA[sbHdrRow][9]='';
-  sheetAOA[sbHdrRow+1][8]='9:25 AM - Clock in';
-  sheetAOA[sbHdrRow+1][9]='9:45 AM - Clock in';
+  sheetAOA[sbHdrRow][9]='Standby/ADHOC';
+  sheetAOA[sbHdrRow][10]='';
+  sheetAOA[sbHdrRow+1][9]='9:25 AM - Clock in';
+  sheetAOA[sbHdrRow+1][10]='9:45 AM - Clock in';
   standbyRows.forEach((r,i)=>{
-    sheetAOA[sbHdrRow+2+i][8]=r.early||'';
-    sheetAOA[sbHdrRow+2+i][9]=r.late||'';
+    sheetAOA[sbHdrRow+2+i][9]=r.early||'';
+    sheetAOA[sbHdrRow+2+i][10]=r.late||'';
   });
 
   // ── Create workbook with cellStyles enabled ───────────────────────────
   const wb=XLSX.utils.book_new();
 
   const ws=XLSX.utils.aoa_to_sheet(sheetAOA);
-  ws['!cols']=[{wch:16},{wch:10},{wch:8},{wch:24},{wch:8},{wch:12},{wch:14},{wch:2},{wch:16},{wch:16},{wch:2},{wch:2},{wch:2}];
+  ws['!cols']=[{wch:16},{wch:10},{wch:8},{wch:24},{wch:8},{wch:12},{wch:14},{wch:30},{wch:2},{wch:16},{wch:16}];
   ws['!freeze']={xSplit:0,ySplit:1};
-  ws['!autofilter']={ref:'A1:G1'};
+  ws['!autofilter']={ref:'A1:H1'};
 
   // ── Helper: set cell style ────────────────────────────────────────────
   function sc(ws,r,c,style,val){
@@ -2282,6 +2283,8 @@ function exportToExcel(){
     sc(ws,rowNum,4,cellStyle(bg,'000000',true));
     // Staging
     sc(ws,rowNum,5,cellStyle(bg,'000000'));
+    // Service Type
+    sc(ws,rowNum,7,cellStyle(bg,'333333'));
     // Pad — solid pad color badge
     sc(ws,rowNum,2,{
       fill:{patternType:'solid',fgColor:{rgb:PAD_BG[r.pad]}},
@@ -2293,7 +2296,7 @@ function exportToExcel(){
 
   // ── Style grounded/backup header (row 1, cols 8-9) ───────────────────
   sc(ws,1,8,headerStyle('000000','FF0000'),'Grounded Vans');
-  sc(ws,1,9,{
+  sc(ws,1,10,{
     fill:{patternType:'solid',fgColor:{rgb:'000000'}},
     font:{bold:true,italic:true,color:{rgb:'00B050'},name:'Calibri',sz:11},
     alignment:{horizontal:'center',vertical:'center'}
