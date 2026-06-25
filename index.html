@@ -807,7 +807,7 @@ const ALL_FLEET_VANS = [
   "Rivian 24","Rivian 26","Rivian 27","Rivian 30","Rivian 31","Rivian 32","Rivian 33",
   "Rivian 34","Rivian 35","Rivian 36","Rivian 37","Rivian 38","Rivian 39","Rivian 40",
   "Rivian 41","Rivian 42","Rivian 43","Rivian 44","Rivian 45","Rivian 46","Rivian 47",
-  "Rivian 48","Rivian 49","Rivian 50","Rivian 51","Rivian 53","Rivian 54","Rivian 55"
+  "Rivian 48","Rivian 49","Rivian 50","Rivian 51","Rivian 53","Rivian 54","Rivian 55","Rivian 56"
 ];
 
 // Nursery-dedicated vans — preferred for Nursery route DAs,
@@ -992,7 +992,10 @@ function addVanUpdate(){
     if(affectedDA){
       // Find next available van for the affected DA
       const usedVans=[...todayAssignments.values()].map(a=>a.van).filter(Boolean);
-      const next=getNextVan(usedVans);
+      // Find affected route to get service class for correct van type
+      const affectedRoute=(lastPatchedRoutes.length?lastPatchedRoutes:routes).find(r=>norm(r.daName)===affectedDA);
+      const affRClass=affectedRoute?routeServiceClass(affectedRoute.serviceType):'rivian';
+      const next=getNextVan(usedVans, false, affRClass);
       if(next){
         // Update their assignment
         todayAssignments.set(affectedDA,{van:next,source:'reassigned'});
@@ -1311,7 +1314,8 @@ function generateMessages(){
     // Protect nursery vans for nursery routes unless this IS a nursery route
     if(!nursery) nurseryReserved.forEach(v=>taken.add(v));
 
-    const next=getNextVan([...taken], nursery);
+    const rClass=routeServiceClass(r.serviceType);
+    const next=getNextVan([...taken], nursery, rClass);
     if(next){
       todayAssignments.set(k,{van:next,source:'new'});
       vanUsedToday.add(next);
@@ -2160,7 +2164,12 @@ function exportToExcel(){
 
   // ── Build side panel rows (grounded, backup, standby) ─────────────────
   const groundedList=getGrounded();
-  const rentalList=RENTAL_VANS.filter(v=>!groundedList.map(normVan).includes(normVan(v)));
+  // Backup = ALL operational vans not assigned today, not grounded
+  const allVanPool=[...ALL_FLEET_VANS,...NURSERY_VANS,...XL_VANS,...RENTAL_VANS];
+  const assignedToday=new Set([...todayAssignments.values()].map(v=>normVan(v.van)).filter(Boolean));
+  const groundedNV=new Set(groundedList.map(normVan));
+  const backupVans=allVanPool.filter(v=>!assignedToday.has(normVan(v))&&!groundedNV.has(normVan(v)));
+  const rentalList=backupVans; // rename for rest of export code compatibility
 
   // Side panel structure:
   // Row 0: headers  "Grounded Vans" | "BACKUP VANS"
@@ -2288,7 +2297,7 @@ function exportToExcel(){
     fill:{patternType:'solid',fgColor:{rgb:'000000'}},
     font:{bold:true,italic:true,color:{rgb:'00B050'},name:'Calibri',sz:11},
     alignment:{horizontal:'center',vertical:'center'}
-  },'BACKUP VANS');
+  },'UNASSIGNED / BACKUP');
 
   // ── Style grounded data (red text on black) ───────────────────────────
   sideData.forEach((d,i)=>{
