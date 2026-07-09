@@ -807,7 +807,7 @@ const ALL_FLEET_VANS = [
   "Rivian 24","Rivian 26","Rivian 27","Rivian 30","Rivian 31","Rivian 32","Rivian 33",
   "Rivian 34","Rivian 35","Rivian 36","Rivian 37","Rivian 38","Rivian 39","Rivian 40",
   "Rivian 41","Rivian 42","Rivian 43","Rivian 44","Rivian 45","Rivian 46","Rivian 47",
-  "Rivian 48","Rivian 49","Rivian 50","Rivian 51","Rivian 53","Rivian 54","Rivian 55","Rivian 56"
+  "Rivian 48","Rivian 49","Rivian 50","Rivian 51","Rivian 53","Rivian 54","Rivian 55","Rivian 56","Rivian 57","Rivian 58","Rivian 59"
 ];
 
 // Nursery-dedicated vans — preferred for Nursery route DAs,
@@ -904,9 +904,16 @@ function loadVanStatus(input){
 
       const station=(document.getElementById('stationCode').value||'DTU6').trim().toUpperCase();
       const grounded=[], operational=[];
-  // Reset rental van arrays and service map for fresh load
-  RENTAL_VANS.length=0; RENTAL_LG_VANS.length=0; RENTAL_XL_VANS.length=0;
-  Object.keys(VAN_SERVICE_MAP).forEach(k=>delete VAN_SERVICE_MAP[k]);
+
+      // ── Fully rebuild all fleet arrays from this file ─────────────────────
+      // This file IS the source of truth — anything not here doesn't get assigned
+      ALL_FLEET_VANS.length=0;
+      // Keep NURSERY_VANS as dispatcher-configured — don't clear from file
+      XL_VANS.length=0;
+      RENTAL_VANS.length=0;
+      RENTAL_LG_VANS.length=0;
+      RENTAL_XL_VANS.length=0;
+      Object.keys(VAN_SERVICE_MAP).forEach(k=>delete VAN_SERVICE_MAP[k]);
 
       rows.forEach(row=>{
         const stCode=String(row['stationCode']||'').trim().toUpperCase();
@@ -914,40 +921,68 @@ function loadVanStatus(input){
 
         const rawName=String(row['vehicleName']||'').trim();
         if(!rawName) return;
-        const riv=rawName.match(/Rivian\s+(\d+)/i);
-        const xl=rawName.match(/^(AZ-\d+\s+XL)/i);
-        const rental=rawName.match(/^(Rental\s+\d+)/i);
+
+        const riv   =rawName.match(/Rivian\s+(\d+)/i);
+        const xl    =rawName.match(/^(AZ-\d+\s+XL)/i);
+        const rental=rawName.match(/Rental\s+(\d+)/i);
         if(!riv && !xl && !rental) return;
 
+        // Normalize to clean van name
         let van;
-        if(riv) van=`Rivian ${riv[1].padStart(2,'0')}`;
-        else if(xl) van=xl[1].toUpperCase();
+        if(riv)    van=`Rivian ${riv[1].padStart(2,'0')}`;
+        else if(xl) van=xl[1].toUpperCase().replace(/\s+/,' ').trim();
         else {
-          // Normalize rental: "Rental 09 Prime 2026 LG" → "Rental 09"
-          const num=rental[1].match(/\d+/);
-          van=`Rental ${num?num[0].padStart(2,'0'):'??'}`;
+          const num=rawName.match(/Rental\s+(\d+)/i);
+          van=`Rental ${num?num[1].padStart(2,'0'):'??'}`;
         }
 
-        const status=String(row['operationalStatus']||row['status']||'').trim().toUpperCase();
-        const svcType=String(row['serviceType']||'').trim();
+        const status  =String(row['operationalStatus']||row['status']||'').trim().toUpperCase();
+        const svcType =String(row['serviceType']||'').trim();
+        const nv      =normVan(van);
 
-        // Map van to service category
-        const nv=normVan(van);
-        if(riv) VAN_SERVICE_MAP[nv]='rivian';
-        else if(xl) VAN_SERVICE_MAP[nv]='xl';
-        else if(/large van/i.test(svcType)&&!/extra/i.test(svcType)) VAN_SERVICE_MAP[nv]='large';
-        else if(/extra large/i.test(svcType)) VAN_SERVICE_MAP[nv]='xl';
-        else VAN_SERVICE_MAP[nv]='large'; // default rental to large
+        // Classify service type
+        if(riv)                                            VAN_SERVICE_MAP[nv]='rivian';
+        else if(xl)                                        VAN_SERVICE_MAP[nv]='xl';
+        else if(/extra large/i.test(svcType))              VAN_SERVICE_MAP[nv]='xl';
+        else if(/large van/i.test(svcType))                VAN_SERVICE_MAP[nv]='large';
+        else                                               VAN_SERVICE_MAP[nv]='large';
 
-        if(status==='GROUNDED'){ grounded.push(van); return; }
+        // Grounded — add to grounded list, still register in fleet for PAVE/query
+        if(status==='GROUNDED') grounded.push(van);
+        else operational.push(van);
 
-        operational.push(van);
-        if(rental){
+        // Add to correct fleet pool (operational OR grounded — fleet = all known vans)
+        if(riv){
+          // Nursery vans are a subset — keep dedicated nursery list for now
+          // (station can override via NURSERY_VANS if needed)
+          if(!ALL_FLEET_VANS.includes(van)) ALL_FLEET_VANS.push(van);
+        } else if(xl){
+          if(!XL_VANS.includes(van)) XL_VANS.push(van);
+        } else if(rental){
           if(!RENTAL_VANS.includes(van)) RENTAL_VANS.push(van);
-          if(VAN_SERVICE_MAP[nv]==='xl'){ if(!RENTAL_XL_VANS.includes(van)) RENTAL_XL_VANS.push(van); }
-          else                          { if(!RENTAL_LG_VANS.includes(van)) RENTAL_LG_VANS.push(van); }
+          if(VAN_SERVICE_MAP[nv]==='xl'){
+            if(!RENTAL_XL_VANS.includes(van)) RENTAL_XL_VANS.push(van);
+          } else {
+            if(!RENTAL_LG_VANS.includes(van)) RENTAL_LG_VANS.push(van);
+          }
         }
       });
+
+      // Sort fleet arrays numerically so assignment is predictable
+      const sortVans=arr=>arr.sort((a,b)=>{
+        const na=parseInt((a.match(/\d+/)||[0])[0]),nb=parseInt((b.match(/\d+/)||[0])[0]);
+        return na-nb;
+      });
+      sortVans(ALL_FLEET_VANS);
+      sortVans(XL_VANS);
+      sortVans(RENTAL_VANS);
+      sortVans(RENTAL_LG_VANS);
+      sortVans(RENTAL_XL_VANS);
+
+      console.log(`Fleet loaded from file: ${ALL_FLEET_VANS.length} Rivians, ${XL_VANS.length} XL, ${RENTAL_VANS.length} Rentals`);
+      console.log('Rivians:', ALL_FLEET_VANS.join(', '));
+      console.log('XL:', XL_VANS.join(', '));
+      if(RENTAL_VANS.length) console.log('Rentals:', RENTAL_VANS.join(', '));
 
       saveGrounded(grounded);
       renderGrounded();
