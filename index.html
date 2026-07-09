@@ -875,10 +875,20 @@ function sheetMatch(fullName){
 
 function lookupVan(fullName){
   const store=getStore(), fn=norm(fullName);
+  // Exact match first
   if(store.manual[fn]) return {van:store.manual[fn].van, source:'manual'};
+  // Partial match: stored key is subset of full name, or full name is subset of key
+  // e.g. "easton goodreau" matches "easton david goodreau"
+  const manualKeys=Object.keys(store.manual);
+  const partialManual=manualKeys.find(k=>fn.includes(k)||k.includes(fn));
+  if(partialManual) return {van:store.manual[partialManual].van, source:'manual'};
   const sv=sheetMatch(fullName);
   if(sv) return {van:sv, source:'sheet'};
   if(store.learned[fn]) return {van:store.learned[fn].van, source:'learned'};
+  // Partial match for learned too
+  const learnedKeys=Object.keys(store.learned);
+  const partialLearned=learnedKeys.find(k=>fn.includes(k)||k.includes(fn));
+  if(partialLearned) return {van:store.learned[partialLearned].van, source:'learned'};
   return {van:null, source:null};
 }
 
@@ -2335,6 +2345,7 @@ function exportToExcel(){
   ws['!autofilter']={ref:'A1:H1'};
 
   // ── Helper: set cell style ────────────────────────────────────────────
+  const border=()=>({top:{style:'thin',color:{rgb:'FF000000'}},bottom:{style:'thin',color:{rgb:'FF000000'}},left:{style:'thin',color:{rgb:'FF000000'}},right:{style:'thin',color:{rgb:'FF000000'}}});
   function sc(ws,r,c,style,val){
     const addr=XLSX.utils.encode_cell({r,c});
     if(!ws[addr]) ws[addr]={t:'s',v:typeof val!=='undefined'?val:''};
@@ -2400,7 +2411,7 @@ function exportToExcel(){
   });
 
   // ── Style Standby/ADHOC block ─────────────────────────────────────────
-  sc(ws,sbHdrRow,9,{fill:{patternType:'solid',fgColor:{rgb:'000000'}},font:{bold:true,color:{rgb:'FFC000'},sz:12,name:'Calibri'},alignment:{horizontal:'center',vertical:'center'},border:border()},'Standby/ADHOC');
+  sc(ws,sbHdrRow,9,{fill:{patternType:'solid',fgColor:{rgb:'000000'}},font:{bold:true,color:{rgb:'FFC000'},sz:12,name:'Calibri'},alignment:{horizontal:'center',vertical:'center'}},'Standby/ADHOC');
   sc(ws,sbHdrRow,10,{fill:{patternType:'solid',fgColor:{rgb:'000000'}},font:{color:{rgb:'000000'}}},'' );
   sc(ws,sbHdrRow+1,9,headerStyle('1F1F1F','FFFFFF',false),'9:25 AM - Clock in');
   sc(ws,sbHdrRow+1,10,headerStyle('1F1F1F','FFFFFF',false),'9:45 AM - Clock in');
