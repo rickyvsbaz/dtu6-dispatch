@@ -368,6 +368,16 @@
     <!-- AFFINITY TAB -->
     <div class="tab-pane" id="pane-affinity">
       <div class="aff-pane">
+        <!-- Nursery Van Selector -->
+        <div style="background:var(--surface2);border:1px solid rgba(134,239,172,.25);border-radius:8px;padding:12px 14px;margin-bottom:10px;">
+          <div style="font-family:'Space Mono',monospace;font-size:10px;color:#86efac;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">&#x1F331; Nursery Dedicated Vans</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Reserved first for nursery route DAs. Use for vans with sustained damage you want kept out of regular rotation.</div>
+          <div id="nurseryVanList" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;min-height:20px;"></div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <input class="inp" id="nurseryVanInput" placeholder="e.g. Rivian 10" style="flex:1;font-size:11px;font-family:'Space Mono',monospace;">
+            <button class="btn-add" onclick="addNurseryVan()" style="border-color:#86efac;color:#86efac;">+</button>
+          </div>
+        </div>
         <!-- Hard-code override editor -->
         <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:10px;">
           <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--accent2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">&#x1F4CC; Hard-Code Driver to Van (Permanent Override)</div>
@@ -1175,11 +1185,13 @@ function getNextVan(usedToday, forNursery=false, routeClass='rivian'){
   getGrounded().forEach(v=>taken.add(normVan(v)));
   const avail=v=>!taken.has(normVan(v));
 
-  // Nursery DAs: try nursery vans first, then anything
+  // Nursery DAs: try nursery vans first, then regular Rivians — NOT XL vans
   if(forNursery){
     const fromNursery=NURSERY_VANS.find(avail);
     if(fromNursery) return fromNursery;
-    // Fall through to service-type assignment below
+    const fromRegularForNursery=ALL_FLEET_VANS.find(avail);
+    if(fromRegularForNursery) return fromRegularForNursery;
+    return XL_VANS.find(avail)||RENTAL_VANS.find(avail)||null;
   }
 
   if(routeClass==='xl'){
@@ -2345,7 +2357,7 @@ function exportToExcel(){
 
   // ── Style main header row ─────────────────────────────────────────────
   const mainHdrBg='1F1F1F';
-  [[0,'Date'],[1,'Wave'],[2,'Pad'],[3,'Name'],[4,'CX#'],[5,'Staging'],[6,'Van']].forEach(([ci,label])=>{
+  [[0,'Date'],[1,'Wave'],[2,'Pad'],[3,'Name'],[4,'CX#'],[5,'Staging'],[6,'Van'],[7,'Service Type']].forEach(([ci,label])=>{
     sc(ws,0,ci,headerStyle(mainHdrBg,'FFFFFF'),label);
   });
 
@@ -2373,7 +2385,7 @@ function exportToExcel(){
   });
 
   // ── Style grounded/backup header (row 1, cols 8-9) ───────────────────
-  sc(ws,1,8,headerStyle('000000','FF0000'),'Grounded Vans');
+  sc(ws,1,9,headerStyle('000000','FF0000'),'Grounded Vans');
   sc(ws,1,10,{
     fill:{patternType:'solid',fgColor:{rgb:'000000'}},
     font:{bold:true,italic:true,color:{rgb:'00B050'},name:'Calibri',sz:11},
@@ -2383,18 +2395,18 @@ function exportToExcel(){
   // ── Style grounded data (red text on black) ───────────────────────────
   sideData.forEach((d,i)=>{
     const rr=i+2;
-    if(d.g) sc(ws,rr,8,cellStyle('000000','FF0000',true),d.g);
-    if(d.b) sc(ws,rr,9,{fill:{patternType:'solid',fgColor:{rgb:'000000'}},font:{italic:true,color:{rgb:'00B050'},name:'Calibri',sz:11}},d.b);
+    if(d.g) sc(ws,rr,9,cellStyle('000000','FF0000',true),d.g);
+    if(d.b) sc(ws,rr,10,{fill:{patternType:'solid',fgColor:{rgb:'000000'}},font:{italic:true,color:{rgb:'00B050'},name:'Calibri',sz:11}},d.b);
   });
 
   // ── Style Standby/ADHOC block ─────────────────────────────────────────
-  sc(ws,sbHdrRow,8,headerStyle('000000','FFC000'),'Standby/ADHOC');
-  sc(ws,sbHdrRow,9,{fill:{patternType:'solid',fgColor:{rgb:'000000'}},font:{color:{rgb:'000000'}}},'' );
-  sc(ws,sbHdrRow+1,8,headerStyle('1F1F1F','FFFFFF',false),'9:25 AM - Clock in');
-  sc(ws,sbHdrRow+1,9,headerStyle('1F1F1F','FFFFFF',false),'9:45 AM - Clock in');
+  sc(ws,sbHdrRow,9,{fill:{patternType:'solid',fgColor:{rgb:'000000'}},font:{bold:true,color:{rgb:'FFC000'},sz:12,name:'Calibri'},alignment:{horizontal:'center',vertical:'center'},border:border()},'Standby/ADHOC');
+  sc(ws,sbHdrRow,10,{fill:{patternType:'solid',fgColor:{rgb:'000000'}},font:{color:{rgb:'000000'}}},'' );
+  sc(ws,sbHdrRow+1,9,headerStyle('1F1F1F','FFFFFF',false),'9:25 AM - Clock in');
+  sc(ws,sbHdrRow+1,10,headerStyle('1F1F1F','FFFFFF',false),'9:45 AM - Clock in');
   standbyRows.forEach((r,i)=>{
-    if(r.early) sc(ws,sbHdrRow+2+i,8,cellStyle('1A1A2E','FFFFFF'),r.early);
-    if(r.late)  sc(ws,sbHdrRow+2+i,9,cellStyle('1A1A2E','FFFFFF'),r.late);
+    if(r.early) sc(ws,sbHdrRow+2+i,9,cellStyle('1A1A2E','FFFFFF'),r.early);
+    if(r.late)  sc(ws,sbHdrRow+2+i,10,cellStyle('1A1A2E','FFFFFF'),r.late);
   });
 
   XLSX.utils.book_append_sheet(wb,ws,'Plan Of Day');
@@ -3324,9 +3336,32 @@ function renderStandbyList(){
   ).join('');
 }
 
+
+// ── Nursery Van Manager ───────────────────────────────────────────────────
+function addNurseryVan(){
+  const raw=document.getElementById('nurseryVanInput').value.trim();if(!raw)return;
+  let van=raw;const m=raw.match(/^(\d+)$/),r2=raw.match(/^rivian\s*(\d+)$/i);
+  if(m)van='Rivian '+m[1].padStart(2,'0');else if(r2)van='Rivian '+r2[1].padStart(2,'0');
+  if(!NURSERY_VANS.includes(van))NURSERY_VANS.push(van);
+  document.getElementById('nurseryVanInput').value='';
+  renderNurseryVanList();saveNurseryVans();
+}
+function removeNurseryVan(van){const i=NURSERY_VANS.indexOf(van);if(i>=0)NURSERY_VANS.splice(i,1);renderNurseryVanList();saveNurseryVans();}
+function renderNurseryVanList(){
+  const el=document.getElementById('nurseryVanList');if(!el)return;
+  if(!NURSERY_VANS.length){el.innerHTML='<div style="font-size:11px;color:var(--muted);">No nursery vans set — using defaults.</div>';return;}
+  el.innerHTML=NURSERY_VANS.map(v=>'<div style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;background:rgba(134,239,172,.12);border:1px solid rgba(134,239,172,.3);border-radius:5px;font-family:\'Space Mono\',monospace;font-size:11px;color:#86efac;">'+v+'<button onclick="removeNurseryVan(\''+v+'\');" style="background:none;border:none;color:rgba(134,239,172,.6);cursor:pointer;padding:0 0 0 4px;font-size:13px;">&times;</button></div>').join('');
+}
+function saveNurseryVans(){try{localStorage.setItem('zult_nursery_vans',JSON.stringify(NURSERY_VANS));}catch{}}
+function loadNurseryVans(){
+  try{const s=localStorage.getItem('zult_nursery_vans');if(s){const a=JSON.parse(s);NURSERY_VANS.length=0;a.forEach(v=>{if(!NURSERY_VANS.includes(v))NURSERY_VANS.push(v);});}}catch{}
+  renderNurseryVanList();
+}
+
 // INIT
 // Init standup preview on load
 buildStandupPreview();
+loadNurseryVans();
 // Migrate any old grounded format (objects→strings) on load
 try{
   const g=localStorage.getItem('zult_grounded');
@@ -3351,6 +3386,7 @@ document.getElementById('vanAssignVan').addEventListener('keydown',e=>{if(e.key=
 document.getElementById('standupNotes')?.addEventListener('input',buildStandupPreview);
 document.getElementById('standby945')?.addEventListener('keydown',e=>{if(e.key==='Enter')addStandbyRow();});
 document.getElementById('standby925')?.addEventListener('keydown',e=>{if(e.key==='Tab'&&!e.shiftKey){e.preventDefault();document.getElementById('standby945').focus();}});
+document.getElementById('nurseryVanInput')?.addEventListener('keydown',e=>{if(e.key==='Enter')addNurseryVan();});
 document.getElementById('vanAssignDA').addEventListener('keydown',e=>{if(e.key==='Tab'&&!e.shiftKey){e.preventDefault();document.getElementById('vanAssignVan').focus();}});
 </script>
 </body>
