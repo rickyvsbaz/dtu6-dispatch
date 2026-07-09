@@ -877,18 +877,25 @@ function lookupVan(fullName){
   const store=getStore(), fn=norm(fullName);
   // Exact match first
   if(store.manual[fn]) return {van:store.manual[fn].van, source:'manual'};
-  // Partial match: stored key is subset of full name, or full name is subset of key
-  // e.g. "easton goodreau" matches "easton david goodreau"
-  const manualKeys=Object.keys(store.manual);
-  const partialManual=manualKeys.find(k=>fn.includes(k)||k.includes(fn));
-  if(partialManual) return {van:store.manual[partialManual].van, source:'manual'};
+  // Smart partial match: first name + last name must both appear in the other
+  // Prevents "easton" matching "easton james" when we want "easton goodreau"
+  const fnParts=fn.split(/\s+/);
+  const fnFirst=fnParts[0], fnLast=fnParts[fnParts.length-1];
+  const manualMatch=Object.keys(store.manual).find(k=>{
+    const kp=k.split(/\s+/);
+    // Must share first name AND last name
+    return kp[0]===fnFirst && kp[kp.length-1]===fnLast;
+  });
+  if(manualMatch) return {van:store.manual[manualMatch].van, source:'manual'};
   const sv=sheetMatch(fullName);
   if(sv) return {van:sv, source:'sheet'};
   if(store.learned[fn]) return {van:store.learned[fn].van, source:'learned'};
-  // Partial match for learned too
-  const learnedKeys=Object.keys(store.learned);
-  const partialLearned=learnedKeys.find(k=>fn.includes(k)||k.includes(fn));
-  if(partialLearned) return {van:store.learned[partialLearned].van, source:'learned'};
+  // Partial match for learned: same first+last name
+  const learnedMatch=Object.keys(store.learned).find(k=>{
+    const kp=k.split(/\s+/);
+    return kp[0]===fnFirst && kp[kp.length-1]===fnLast;
+  });
+  if(learnedMatch) return {van:store.learned[learnedMatch].van, source:'learned'};
   return {van:null, source:null};
 }
 
@@ -1144,11 +1151,16 @@ function isNurseryRoute(daName){
 // Classify a route's service type into: 'rivian' | 'large' | 'xl' | 'nursery'
 function routeServiceClass(serviceType){
   const s=(serviceType||'').toLowerCase();
-  if(/nursery/i.test(s)) return 'nursery';
-  if(/rivian/i.test(s)) return 'rivian';
+  // Explicit large/XL van routes — the ONLY routes that get gas vans
   if(/extra large/i.test(s)) return 'xl';
   if(/large van/i.test(s)) return 'large';
-  return 'rivian'; // Default
+  // Everything else (Rivian MEDIUM, Nursery EV, etc.) → needs an EDV Rivian
+  return 'rivian';
+}
+
+// Is this a nursery route? (affects which Rivians are preferred, not van TYPE)
+function isNurseryServiceType(serviceType){
+  return /nursery/i.test(serviceType||'');
 }
 
 // Infer van class from van name — works WITHOUT VAN_SERVICE_MAP being loaded
@@ -1170,12 +1182,11 @@ function vanClassFromName(van){
 
 // Check van+route compatibility using name-based classification
 function vanRouteCompatible(van, routeClass, isNursery){
-  if(isNursery) return true;
-  if(routeClass==='nursery') return true;
   const vc=vanClassFromName(van);
-  // XL can cover large routes (bigger is ok), but Rivian cannot cover large/xl
   if(routeClass==='large') return vc==='large'||vc==='xl';
   if(routeClass==='xl')    return vc==='xl';
+  // Rivian route (including nursery EV): Rivians are correct, XL is wrong type
+  // XL may be assigned as last resort but flags a compliance warning
   if(routeClass==='rivian') return vc==='rivian';
   return true;
 }
@@ -1195,44 +1206,38 @@ function getNextVan(usedToday, forNursery=false, routeClass='rivian'){
   getGrounded().forEach(v=>taken.add(normVan(v)));
   const avail=v=>!taken.has(normVan(v));
 
-  // Nursery DAs: try nursery vans first, then regular Rivians — NOT XL vans
-  if(forNursery){
-    const fromNursery=NURSERY_VANS.find(avail);
-    if(fromNursery) return fromNursery;
-    const fromRegularForNursery=ALL_FLEET_VANS.find(avail);
-    if(fromRegularForNursery) return fromRegularForNursery;
-    return XL_VANS.find(avail)||RENTAL_VANS.find(avail)||null;
-  }
-
-  if(routeClass==='xl'){
-    // XL route: AZ XL vans first, then Rental XL, then anything XL
-    const fromAZ=XL_VANS.find(avail);
-    if(fromAZ) return fromAZ;
-    const fromRentalXL=RENTAL_XL_VANS.find(avail);
-    if(fromRentalXL) return fromRentalXL;
-    // If no XL available and it's nursery, fall back
-    if(forNursery){ const fromAny=ALL_FLEET_VANS.find(avail);if(fromAny)return fromAny; }
-    return null; // no compatible van
-  }
-
+  // ── EXPLICIT LARGE VAN ROUTES: Rental LG → Rental XL → AZ XL ───────────
   if(routeClass==='large'){
-    // Large van route: Rental LG vans, then Rental XL as overflow
-    const fromLG=RENTAL_LG_VANS.find(avail);
-    if(fromLG) return fromLG;
-    const fromXL_overflow=RENTAL_XL_VANS.find(avail); // XL can do large routes
-    if(fromXL_overflow) return fromXL_overflow;
-    if(forNursery){ const fromAny=ALL_FLEET_VANS.find(avail);if(fromAny)return fromAny; }
+    const fromLG=RENTAL_LG_VANS.find(avail);   if(fromLG) return fromLG;
+    const fromRXL=RENTAL_XL_VANS.find(avail);  if(fromRXL) return fromRXL;
+    const fromAZXL=XL_VANS.find(avail);        if(fromAZXL) return fromAZXL;
     return null;
   }
 
-  // Rivian route (default): try regular Rivians, then nursery overflow
-  const fromRegular=ALL_FLEET_VANS.find(avail);
-  if(fromRegular) return fromRegular;
-  const fromNurseryOverflow=NURSERY_VANS.find(avail);
-  if(fromNurseryOverflow) return fromNurseryOverflow;
-  // Last resort: XL or rental (compliance warning will fire)
-  const fromXL=XL_VANS.find(avail);
-  if(fromXL) return fromXL;
+  // ── EXPLICIT EXTRA LARGE VAN ROUTES: AZ XL → Rental XL ─────────────────
+  if(routeClass==='xl'){
+    const fromAZ=XL_VANS.find(avail);          if(fromAZ) return fromAZ;
+    const fromRXL=RENTAL_XL_VANS.find(avail);  if(fromRXL) return fromRXL;
+    return null; // No XL available — leave unassigned
+  }
+
+  // ── ALL OTHER ROUTES (Rivian MEDIUM, Nursery EV, default) ───────────────
+  // EDV Rivians ALWAYS first. AZ XL gas vans only as absolute last resort.
+
+  // Nursery-route DAs: dedicated nursery Rivians first, then any Rivian
+  if(forNursery){
+    const fromNursery=NURSERY_VANS.find(avail);         if(fromNursery) return fromNursery;
+    const fromRegular=ALL_FLEET_VANS.find(avail);       if(fromRegular) return fromRegular;
+    // No Rivians left at all — XL is wrong vehicle type for nursery/EV routes
+    return null;
+  }
+
+  // Regular Rivian route: regular fleet first, then nursery overflow Rivians
+  const fromRegular=ALL_FLEET_VANS.find(avail);         if(fromRegular) return fromRegular;
+  const fromNurseryOverflow=NURSERY_VANS.find(avail);   if(fromNurseryOverflow) return fromNurseryOverflow;
+
+  // All EDV Rivians exhausted — only NOW use AZ XL gas vans
+  const fromXL=XL_VANS.find(avail);                     if(fromXL) return fromXL;
   return RENTAL_VANS.find(avail)||null;
 }
 
@@ -1365,14 +1370,17 @@ function generateMessages(){
     }
   });
 
-  // Nursery Pre-pass: also reserve nursery vans for nursery-route DAs
+  // Nursery Pre-pass: reserve vans for ALL nursery-route DAs
+  // First fill nursery-dedicated vans, then reserve regular Rivians for overflow
   const nurseryReserved=new Set();
-  filtered.forEach(r=>{
-    if(isNurseryRoute(r.daName)){
-      // Reserve a nursery van for this DA (first available)
-      const nv=NURSERY_VANS.find(v=>!nurseryReserved.has(normVan(v))&&!groundedSet.has(normVan(v)));
-      if(nv) nurseryReserved.add(normVan(nv));
-    }
+  const nurseryDAs=filtered.filter(r=>isNurseryRoute(r.daName));
+  nurseryDAs.forEach(r=>{
+    // Try nursery-dedicated vans first
+    const nv=NURSERY_VANS.find(v=>!nurseryReserved.has(normVan(v))&&!groundedSet.has(normVan(v)));
+    if(nv){ nurseryReserved.add(normVan(nv)); return; }
+    // Overflow: reserve a regular Rivian for this nursery DA
+    const rv=ALL_FLEET_VANS.find(v=>!nurseryReserved.has(normVan(v))&&!groundedSet.has(normVan(v))&&!affinityReserved.has(normVan(v)));
+    if(rv) nurseryReserved.add(normVan(rv));
   });
 
   // Pass 1: assign each driver their affinity van
