@@ -1067,7 +1067,7 @@ function addVanUpdate(){
         const cx=daRoute?(overrides[daRoute.routeCode]||daRoute.routeCode):'—';
         const stg=daRoute?daRoute.stagingLocation:'—';
         const allWaves=[...new Set(routes.map(r=>r.wave))].sort();
-        const padMap={}; allWaves.forEach((w,i)=>padMap[w]=getPad(i));
+        const padMap={}; allWaves.forEach((w,i)=>padMap[w]=getPad(w));
         const pLabels=['','🔵 Pad 1','🟠 Pad 2','🟢 Pad 3'];
         const wave=daRoute?(daRoute._wave||daRoute.wave):'';
         const pad=wave?pLabels[padMap[wave]]:'';
@@ -1324,7 +1324,7 @@ function renderWaveFilter(){
   const c=document.getElementById('waveFilter'); c.innerHTML='';
   const pLabels=['','Pad 1','Pad 2','Pad 3'];
   waves.forEach((wave,i)=>{
-    const count=routes.filter(r=>r.wave===wave).length, pad=getPad(i);
+    const count=routes.filter(r=>r.wave===wave).length, pad=getPad(wave);
     const el=document.createElement('div'); el.className='wave-btn active'; el.dataset.wave=wave;
     el.innerHTML=`<span><span class="pd pd${pad}"></span>${wave}</span><span style="display:flex;align-items:center;gap:4px;"><span style="font-size:10px;color:var(--pad${pad});">${pLabels[pad]}</span><span class="wc">${count}</span></span>`;
     el.onclick=()=>{ if(activeWaves.has(wave)){activeWaves.delete(wave);el.classList.remove('active');}else{activeWaves.add(wave);el.classList.add('active');} };
@@ -1339,7 +1339,7 @@ function generateMessages(){
   const filtered=routes.filter(r=>activeWaves.has(r.wave));
   if(!filtered.length){alert('No routes match active wave filters.');return;}
   const allWaves=[...new Set(routes.map(r=>r.wave))].sort();
-  const padMap={}; allWaves.forEach((w,i)=>padMap[w]=getPad(i));
+  const padMap={}; allWaves.forEach((w,i)=>padMap[w]=getPad(w));
   const pLabels=['','🔵 Pad 1','🟠 Pad 2','🟢 Pad 3'];
   const station=document.getElementById('stationCode').value||'DTU6';
 
@@ -1656,7 +1656,7 @@ function runQuery(){
     if(!todayAssignments.size) answer+='\n\n(Generate routes first to see what is truly unassigned)';
   }
   if(!answer&&/grounded/.test(q)){const g=getGrounded();answer=g.length?'Grounded: '+g.join(', '):'No grounded vans.';}
-  if(!answer&&/wave|pad|what time/.test(q)&&routes.length){const allW=[...new Set(routes.map(r=>r.wave))].sort();const pm={};allW.forEach((w,i)=>pm[w]=getPad(i));const pl=['','Pad 1','Pad 2','Pad 3'];answer='Waves:\n'+allW.map(w=>w+' '+pl[pm[w]]+' ('+routes.filter(r=>r.wave===w).length+' routes)').join('\n');}
+  if(!answer&&/wave|pad|what time/.test(q)&&routes.length){const allW=[...new Set(routes.map(r=>r.wave))].sort();const pm={};allW.forEach((w,i)=>pm[w]=getPad(w));const pl=['','Pad 1','Pad 2','Pad 3'];answer='Waves:\n'+allW.map(w=>w+' '+pl[pm[w]]+' ('+routes.filter(r=>r.wave===w).length+' routes)').join('\n');}
   if(!answer&&/staging/.test(q)&&routes.length){const ng=q.replace(/staging|for|of/g,'').replace(/[?]/g,'').trim();if(ng.length>1){const m=routes.find(r=>norm(r.daName).includes(ng));answer=m?m.daName+': '+m.stagingLocation+' | '+(overrides[m.routeCode]||m.routeCode)+' | '+m.wave:'No match "'+ng+'".';}else{const p=lastPatchedRoutes.length?lastPatchedRoutes:routes;answer=[...p].sort((a,b)=>a.stagingLocation.localeCompare(b.stagingLocation)).map(r=>r.stagingLocation.padEnd(10)+' '+r.daName).join('\n');}}
   if(!answer&&/nursery/.test(q)&&routes.length){const nur=routes.filter(r=>/nursery/i.test(r.serviceType||''));answer=nur.length?'Nursery ('+nur.length+'):\n'+nur.map(r=>{const a=todayAssignments.get(norm(r.daName));return r.daName+' -> '+(overrides[r.routeCode]||r.routeCode)+' | '+(a&&a.van?a.van:'?');}).join('\n'):'No nursery today.';}
   if(!answer&&/\bxl\b|ford/.test(q)){const grounded=new Set(getGrounded().map(normVan));answer='XL vans:\n'+XL_VANS.map(v=>{const a=[...todayAssignments.entries()].find(([,x])=>normVan(x.van)===normVan(v));return v+(grounded.has(normVan(v))?' GROUNDED':a?' -> '+a[0]:' available');}).join('\n');}
@@ -1855,7 +1855,7 @@ function addUpdateEntry(){
   // Get pad label from wave if we found the route
   let staging = '—', wave = '', pad = '';
   const allWaves = [...new Set(routes.map(r=>r.wave))].sort();
-  const padMap = {}; allWaves.forEach((w,i) => padMap[w] = getPad(i));
+  const padMap = {}; allWaves.forEach((w,i) => padMap[w] = getPad(w));
   const pLabels = ['','🔵 Pad 1','🟠 Pad 2','🟢 Pad 3'];
 
   if(match){
@@ -1973,7 +1973,7 @@ function exportImage(){
   const {waves,padMap,pLabels,station}=lastGeneratedWaves;
   const routePool=lastPatchedRoutes.length?lastPatchedRoutes:routes;
   const allWaves=[...new Set(routes.map(r=>r.wave))].sort();
-  const padMapFull={}; allWaves.forEach((w,i)=>padMapFull[w]=getPad(i));
+  const padMapFull={}; allWaves.forEach((w,i)=>padMapFull[w]=getPad(w));
 
   const dateRef=dopsDate||new Date();
   const dateStr=dateRef.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
@@ -2238,7 +2238,7 @@ function exportToExcel(){
   });
 
   const padMapFull={};
-  allWaves.forEach((w,i)=>padMapFull[w]=getPad(i));
+  allWaves.forEach((w,i)=>padMapFull[w]=getPad(w));
   const pLabels=['','Pad 1','Pad 2','Pad 3'];
 
   const grouped={};
@@ -2632,7 +2632,7 @@ function buildManagerReport(){
   const dateRef=dopsDate||new Date();
   const today=dateRef.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
   const allWaves=[...new Set(routes.map(r=>r.wave))].sort();
-  const padMap={}; allWaves.forEach((w,i)=>padMap[w]=getPad(i));
+  const padMap={}; allWaves.forEach((w,i)=>padMap[w]=getPad(w));
   const pLabels=['','Pad 1','Pad 2','Pad 3'];
   const routePool=lastPatchedRoutes.length?lastPatchedRoutes:routes;
   const grouped={};
@@ -2822,7 +2822,7 @@ async function generateImageBlob(){
     const {waves,padMap,pLabels,station}=lastGeneratedWaves;
     const routePool=lastPatchedRoutes.length?lastPatchedRoutes:routes;
     const allWaves=[...new Set(routes.map(r=>r.wave))].sort();
-    const padMapFull={}; allWaves.forEach((w,i)=>padMapFull[w]=getPad(i));
+    const padMapFull={}; allWaves.forEach((w,i)=>padMapFull[w]=getPad(w));
     const grouped={};
     routePool.forEach(r=>{const w=r._wave||r.wave;if(!grouped[w])grouped[w]=[];grouped[w].push(r);});
 
